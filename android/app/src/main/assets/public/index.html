@@ -1,0 +1,217 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Real Life Leveling</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+      * { touch-action: manipulation; }
+      body {
+        font-family: 'Roboto', sans-serif;
+        background-color: #020617;
+      }
+      .font-orbitron {
+        font-family: 'Orbitron', sans-serif;
+      }
+
+      /* Glassmorphism Panels */
+      .glass-panel {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .glowing-border {
+        box-shadow: 0 0 10px rgba(56, 189, 248, 0.3), inset 0 0 5px rgba(56, 189, 248, 0.1);
+      }
+
+      .neon-text {
+        text-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+      }
+
+      @keyframes scanline {
+        0% { transform: translateY(-100%); }
+        100% { transform: translateY(100%); }
+      }
+      .scanline-effect {
+        position: relative;
+        overflow: hidden;
+      }
+      .scanline-effect::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background: rgba(56, 189, 248, 0.1);
+        opacity: 0.5;
+        animation: scanline 4s linear infinite;
+        pointer-events: none;
+      }
+
+       @keyframes floatUp {
+        0% { opacity: 1; transform: translate(-50%, 0); }
+        100% { opacity: 0; transform: translate(-50%, -100px); }
+      }
+      .animate-float-up {
+        animation: floatUp 2s ease-out forwards;
+      }
+      .floating-text {
+        position: fixed;
+        left: 50%;
+        bottom: 50px;
+        transform: translateX(-50%);
+        font-size: 1.5rem;
+        font-weight: bold;
+        text-shadow: 0 0 10px currentColor;
+        pointer-events: none;
+        z-index: 100;
+      }
+      @keyframes achievement-fade-in {
+        from { opacity: 0; transform: scale(0.8); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      @keyframes achievement-fade-out {
+        from { opacity: 1; transform: scale(1); }
+        to { opacity: 0; transform: scale(0.9); }
+      }
+      .achievement-enter {
+        animation: achievement-fade-in 0.5s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
+      }
+      .achievement-exit {
+        animation: achievement-fade-out 0.5s ease-out both;
+      }
+      
+      /* Revised Notification Animation: Shorter duration (2.5s) */
+      @keyframes notification-entry {
+        0% { opacity: 0; transform: translateY(-30px) scale(0.9); }
+        15% { opacity: 1; transform: translateY(0) scale(1); }
+        85% { opacity: 1; transform: translateY(0) scale(1); }
+        100% { opacity: 0; transform: translateY(-15px) scale(0.95); }
+      }
+      .animate-notification {
+        animation: notification-entry 2.5s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+      }
+
+      /* S Grade Shining Sweep Effect */
+      @keyframes shine-sweep {
+        0% { transform: translateX(-150%) skewX(-25deg); }
+        100% { transform: translateX(250%) skewX(-25deg); }
+      }
+      .animate-grade-s-glow {
+        position: relative;
+        overflow: hidden;
+        border-color: #facc15 !important;
+        box-shadow: 0 0 15px rgba(250, 204, 21, 0.4);
+      }
+      .animate-grade-s-glow::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 50%;
+        height: 100%;
+        background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent);
+        animation: shine-sweep 3s infinite;
+        pointer-events: none;
+      }
+
+      /* S+ Pure Blood Red Glow (No White/Blinking) */
+      @keyframes s-plus-blood-red {
+        0%, 100% {
+          box-shadow: 0 0 20px #880000, 0 0 40px #aa0000, inset 0 0 15px #660000;
+          border-color: #ff0000;
+        }
+        50% {
+          box-shadow: 0 0 40px #ff0000, 0 0 80px #cc0000, inset 0 0 30px #880000;
+          border-color: #990000;
+        }
+      }
+      .animate-grade-s-plus-glow {
+        animation: s-plus-blood-red 2s infinite ease-in-out;
+        position: relative;
+      }
+      /* Pure red inner border, no white */
+      .animate-grade-s-plus-glow::before {
+        content: '';
+        position: absolute;
+        inset: -1px;
+        border: 2px solid rgba(255, 0, 0, 0.6);
+        border-radius: inherit;
+        pointer-events: none;
+      }
+
+      /* X Black Hole Vortex */
+      @keyframes black-hole-vortex {
+        0% {
+          box-shadow: 0 0 10px #ff0000, 0 0 20px #550000, inset 0 0 40px #000;
+          transform: scale(1);
+        }
+        50% {
+          box-shadow: 0 0 30px #ff0000, 0 0 60px #220000, inset 0 0 60px #000;
+          transform: scale(0.99);
+        }
+        100% {
+          box-shadow: 0 0 10px #ff0000, 0 0 20px #550000, inset 0 0 40px #000;
+          transform: scale(1);
+        }
+      }
+      .animate-black-hole {
+        background: radial-gradient(circle at center, #000 0%, #1a0000 70%, #330000 100%) !important;
+        border-color: #000 !important;
+        animation: black-hole-vortex 3s ease-in-out infinite;
+      }
+
+      /* Transitions */
+      @keyframes train-pulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.7); }
+        70% { transform: scale(1.02); box-shadow: 0 0 0 10px rgba(96, 165, 250, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(96, 165, 250, 0); }
+      }
+      .animate-train-pulse {
+        animation: train-pulse 0.7s ease-in-out;
+      }
+
+      .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(56, 189, 248, 0.2); border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(56, 189, 248, 0.4); }
+
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+
+      .screen-flash-overlay {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 100;
+        opacity: 0;
+        animation: screen-flash 0.5s ease-out forwards;
+      }
+      @keyframes screen-flash {
+        0% { opacity: 0.5; }
+        100% { opacity: 0; }
+      }
+    </style>
+  <script type="module" crossorigin src="./assets/index-CASDIpVm.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-OShi9Thv.css">
+</head>
+  <body class="bg-black text-white selection:bg-blue-500/30 selection:text-blue-200">
+    <div id="root"></div>
+  </body>
+</html>
