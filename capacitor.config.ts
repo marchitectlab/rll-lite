@@ -4,11 +4,6 @@ const config: CapacitorConfig = {
   appId: 'com.rll.mobile',
   appName: 'R.L.L Lite',
   webDir: 'dist',
-  android: {
-    buildOptions: {
-      releaseType: 'APK',
-    }
-  },
   server: {
     androidScheme: 'https'
   }
