@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# Production keystore — NEVER commit this
+android/keystore.properties
+*.jks
+*.keystore
+
+# Android build outputs
+android/app/build/
+android/.gradle/
+android/local.properties
