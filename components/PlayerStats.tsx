@@ -7,9 +7,6 @@ import { Difficulty } from '../types';
 interface PlayerStatsProps {
   player: Player;
   onRename: (newName: string) => void;
-  onLoginPress?: () => void;
-  userEmail?: string;
-  onSignOut?: () => void;
 }
 
 const EditIcon = () => (
@@ -28,7 +25,7 @@ const getAttributeGradeData = (val: number) => {
   return { grade: 'S+', min: 3001, max: 3001, color: 'from-red-600 to-red-400', glow: 'rgba(239, 68, 68, 0.6)', text: 'text-red-500', border: 'border-red-500/50', isMax: true };
 };
 
-export const PlayerStats: React.FC<PlayerStatsProps> = ({ player, onRename, onLoginPress, userEmail, onSignOut }) => {
+export const PlayerStats: React.FC<PlayerStatsProps> = ({ player, onRename }) => {
   const { level, xp, rank, name, shopCoins, equippedTitle, attributes } = player;
   const xpToNextLevel = getXpToNextLevel(level);
   const xpPercentage = (xp / xpToNextLevel) * 100;
@@ -122,41 +119,6 @@ export const PlayerStats: React.FC<PlayerStatsProps> = ({ player, onRename, onLo
         </div>
       </div>
 
-
-      {/* Account / Login Section */}
-      <div className="lg:col-span-12 mt-2">
-        <div className="border border-blue-500/10 rounded-lg p-4 md:p-6 bg-transparent">
-          {userEmail ? (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <p className="font-orbitron text-[8px] text-gray-500 uppercase tracking-widest mb-1">Linked Account</p>
-                <p className="font-orbitron text-xs text-blue-400/80 truncate max-w-xs">{userEmail}</p>
-              </div>
-              {onSignOut && (
-                <button
-                  onClick={onSignOut}
-                  className="font-orbitron text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-500/40 px-4 py-2 rounded transition-all duration-200"
-                >
-                  Sign Out
-                </button>
-              )}
-            </div>
-          ) : onLoginPress ? (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <p className="font-orbitron text-[8px] text-gray-500 uppercase tracking-widest mb-1">Account</p>
-                <p className="text-[10px] text-gray-600 font-bold uppercase tracking-wide">Link an account to sync your progress across devices</p>
-              </div>
-              <button
-                onClick={onLoginPress}
-                className="shrink-0 font-orbitron text-[10px] font-black uppercase tracking-widest text-blue-400 border border-blue-500/40 hover:bg-blue-500/10 hover:border-blue-400 px-5 py-2.5 rounded transition-all duration-200"
-              >
-                Login / Register
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </div>
 
       {/* Right Section: Attributes Matrix */}
       <div className="lg:col-span-8 space-y-4 md:space-y-6">
