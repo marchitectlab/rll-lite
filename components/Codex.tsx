@@ -9,6 +9,9 @@ interface CodexProps {
   onSetBackground: (url: string | null) => void;
   background: string | null;
   onNavigateToReport: () => void;
+  onLoginPress?: () => void;
+  userEmail?: string;
+  onSignOut?: () => void;
 }
 
 const BackgroundUploader: React.FC<{
@@ -186,6 +189,7 @@ const codexData = {
     system: {
         title: "System",
         entries: {
+            account: { title: "Linked Account", content: "Link an account to sync your progress across devices and back up your data securely." },
             report: { title: "System Reports", content: "Generate visual reports of your progress to track your journey to the pinnacle." },
             data: { title: "Data Management", content: "Export or import your status. Proceed with caution." }
         }
@@ -194,7 +198,7 @@ const codexData = {
 
 type CodexTab = keyof typeof codexData;
 
-export const Codex: React.FC<CodexProps> = ({ onOpenExport, onOpenImport, onSetBackground, background, onNavigateToReport }) => {
+export const Codex: React.FC<CodexProps> = ({ onOpenExport, onOpenImport, onSetBackground, background, onNavigateToReport, onLoginPress, userEmail, onSignOut }) => {
     const [activeTab, setActiveTab] = useState<CodexTab>('ranks');
     const [activeEntryKey, setActiveEntryKey] = useState<string>(Object.keys(codexData.ranks.entries)[0]);
 
@@ -294,6 +298,43 @@ export const Codex: React.FC<CodexProps> = ({ onOpenExport, onOpenImport, onSetB
                     {activeEntryKey === 'background' && (
                         <div className="pt-4 mt-4 border-t border-gray-700">
                             <BackgroundUploader background={background} onSetBackground={onSetBackground} />
+                        </div>
+                    )}
+
+                    {activeEntryKey === 'account' && (
+                        <div className="pt-4 mt-4 border-t border-gray-700">
+                            {userEmail ? (
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border border-blue-500/20 rounded-lg bg-blue-500/5">
+                                    <div>
+                                        <p className="font-orbitron text-[8px] text-gray-500 uppercase tracking-widest mb-1">Linked Account</p>
+                                        <p className="font-orbitron text-sm text-blue-400/90 truncate max-w-xs">{userEmail}</p>
+                                        <p className="text-[10px] text-green-400 font-bold uppercase tracking-widest mt-1">● Synced</p>
+                                    </div>
+                                    {onSignOut && (
+                                        <button
+                                            onClick={onSignOut}
+                                            className="font-orbitron text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-red-400 border border-gray-700 hover:border-red-500/40 px-5 py-2.5 rounded transition-all duration-200"
+                                        >
+                                            Sign Out
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border border-blue-500/20 rounded-lg bg-blue-500/5">
+                                    <div>
+                                        <p className="font-orbitron text-[8px] text-gray-500 uppercase tracking-widest mb-1">No Account Linked</p>
+                                        <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wide leading-relaxed">Sign in to back up your progress and sync across devices.</p>
+                                    </div>
+                                    {onLoginPress && (
+                                        <button
+                                            onClick={onLoginPress}
+                                            className="shrink-0 font-orbitron text-[10px] font-black uppercase tracking-widest text-blue-400 border border-blue-500/40 hover:bg-blue-500/10 hover:border-blue-400 px-6 py-3 rounded transition-all duration-200 shadow-[0_0_15px_rgba(56,189,248,0.1)]"
+                                        >
+                                            Login / Register
+                                        </button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
 
