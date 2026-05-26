@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { useAuth } from './hooks/useAuth';
+import { initializeRevenueCat } from './lib/revenuecat';
 import App from './App';
 
 const LoadingScreen: React.FC = () => (
@@ -26,6 +28,15 @@ const LoadingScreen: React.FC = () => (
 
 const AppRoot: React.FC = () => {
   const { user, loading, signIn, signUp, signOut, resetPassword, error, clearError } = useAuth();
+
+  // Initialize RevenueCat on app launch (native only).
+  // Re-runs when auth resolves so purchases are attributed to the
+  // correct user ID — RC handles de-duplication of configure calls.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    if (loading) return;
+    initializeRevenueCat(user?.id ?? undefined);
+  }, [loading, user?.id]);
 
   if (loading) return <LoadingScreen />;
 

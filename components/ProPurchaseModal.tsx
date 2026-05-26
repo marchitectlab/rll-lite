@@ -4,20 +4,18 @@ import { ProPlan } from '../hooks/usePro';
 interface ProPurchaseModalProps {
   onClose: () => void;
   onPurchase: (plan: 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
-  onRestore: () => Promise<{ success: boolean; wasPro: boolean }>;
   purchasing: boolean;
-  restoring: boolean;
   offeringsLoading: boolean;
   monthlyPlan: ProPlan;
   lifetimePlan: ProPlan;
 }
 
 export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
-  onClose, onPurchase, onRestore, purchasing, restoring,
+  onClose, onPurchase, purchasing,
   offeringsLoading, monthlyPlan, lifetimePlan,
 }) => {
   const [selected, setSelected] = useState<'monthly' | 'lifetime'>('lifetime');
-  const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; msg: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
   const handlePurchase = async () => {
     setNotice(null);
@@ -27,19 +25,6 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
       setTimeout(onClose, 1800);
     } else {
       setNotice({ type: 'error', msg: result.error ?? 'Purchase could not be completed. Try again.' });
-    }
-  };
-
-  const handleRestore = async () => {
-    setNotice(null);
-    const result = await onRestore();
-    if (!result.success) {
-      setNotice({ type: 'error', msg: 'Could not restore. Check your connection and try again.' });
-    } else if (result.wasPro) {
-      setNotice({ type: 'success', msg: 'Pro restored! Welcome back.' });
-      setTimeout(onClose, 1800);
-    } else {
-      setNotice({ type: 'info', msg: 'No previous Pro purchase found on this account.' });
     }
   };
 
@@ -70,7 +55,7 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
           </div>
 
           <div className="px-5 py-4">
-            {/* Features list */}
+            {/* Features */}
             <ul className="space-y-2 mb-4">
               {[
                 { icon: '🚫', label: 'Ad-Free Experience', sub: 'No banners or popups' },
@@ -140,9 +125,9 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
             {/* Notice */}
             {notice && (
               <div className={`mb-3 px-3 py-2 rounded text-[9px] font-orbitron uppercase tracking-wide font-black ${
-                notice.type === 'success' ? 'bg-green-900/50 text-green-400 border border-green-500/40' :
-                notice.type === 'error' ? 'bg-red-900/50 text-red-400 border border-red-500/40' :
-                'bg-blue-900/50 text-blue-400 border border-blue-500/40'
+                notice.type === 'success'
+                  ? 'bg-green-900/50 text-green-400 border border-green-500/40'
+                  : 'bg-red-900/50 text-red-400 border border-red-500/40'
               }`}>
                 {notice.msg}
               </div>
@@ -151,7 +136,7 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
             {/* Purchase button */}
             <button
               onClick={handlePurchase}
-              disabled={purchasing || restoring || offeringsLoading}
+              disabled={purchasing || offeringsLoading}
               className="w-full bg-gradient-to-r from-yellow-500 to-amber-400 text-black font-orbitron text-[11px] font-black uppercase tracking-widest py-3 rounded shadow-[0_0_20px_rgba(234,179,8,0.5)] hover:shadow-[0_0_30px_rgba(234,179,8,0.7)] transition-all hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100 mb-2"
             >
               {purchasing
@@ -159,21 +144,12 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
                 : `⚡ Get ${selected === 'monthly' ? monthlyPlan.price + '/mo' : lifetimePlan.price + ' Lifetime'}`}
             </button>
 
-            <div className="flex gap-2">
-              <button
-                onClick={handleRestore}
-                disabled={purchasing || restoring}
-                className="flex-1 bg-slate-800 border border-slate-600 text-gray-400 hover:text-white font-orbitron text-[9px] font-black uppercase tracking-widest py-2 rounded transition-colors disabled:opacity-40"
-              >
-                {restoring ? '⟳ Checking...' : 'Restore Purchase'}
-              </button>
-              <button
-                onClick={onClose}
-                className="flex-1 bg-slate-800 border border-slate-700 text-gray-600 hover:text-gray-300 font-orbitron text-[9px] font-black uppercase tracking-widest py-2 rounded transition-colors"
-              >
-                Not Now
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="w-full bg-slate-800 border border-slate-700 text-gray-500 hover:text-gray-300 font-orbitron text-[9px] font-black uppercase tracking-widest py-2 rounded transition-colors"
+            >
+              Not Now
+            </button>
 
             <p className="text-center font-orbitron text-[8px] text-gray-600 mt-3 tracking-wide">
               Payment processed via Google Play · Cancel anytime (monthly)

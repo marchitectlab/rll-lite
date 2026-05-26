@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { getOfferings, purchasePackage, restorePurchases as rcRestore, checkIsPro } from '../lib/revenuecat';
+import { initializeRevenueCat, getOfferings, purchasePackage, checkIsPro } from '../lib/revenuecat';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 const PRO_STORAGE_KEY = 'rll_is_pro';
@@ -22,7 +22,6 @@ export type ProPlan = {
 export const usePro = () => {
   const [isPro, setIsPro] = useState<boolean>(loadLocalPro);
   const [purchasing, setPurchasing] = useState(false);
-  const [restoring, setRestoring] = useState(false);
   const [offeringsLoading, setOfferingsLoading] = useState(Capacitor.isNativePlatform());
 
   const [monthlyPlan, setMonthlyPlan] = useState<ProPlan>({
@@ -36,6 +35,24 @@ export const usePro = () => {
     if (!Capacitor.isNativePlatform()) return;
     (async () => {
       try {
+        // ── Initialize RevenueCat SDK first ──
+        await initializeRevenueCat();
+
+        // ── RevenueCat entitlement verification on every app launch ──
+        // Always check server-side entitlement — cannot be spoofed by
+        // clearing localStorage because RevenueCat validates against
+        // Google Play servers.
+        const entitledOnServer = await checkIsPro();
+        if (entitledOnServer) {
+          setIsPro(true);
+          saveLocalPro(true);
+        } else {
+          // Revoke if server says not entitled (e.g. refund, expiry)
+          setIsPro(false);
+          saveLocalPro(false);
+        }
+
+        // ── Load live prices from offerings ──
         const offerings = await getOfferings();
         if (offerings?.current) {
           const pkgs = offerings.current.availablePackages;
@@ -58,8 +75,6 @@ export const usePro = () => {
             label: 'Lifetime', price: lifetime.product.priceString, period: 'one-time', pkg: lifetime,
           });
         }
-        const pro = await checkIsPro();
-        if (pro) { setIsPro(true); saveLocalPro(true); }
       } catch {}
       setOfferingsLoading(false);
     })();
@@ -74,6 +89,7 @@ export const usePro = () => {
         if (result.success) { setIsPro(true); saveLocalPro(true); }
         return result;
       }
+      // Web/dev: activate directly for testing
       setIsPro(true);
       saveLocalPro(true);
       return { success: true };
@@ -84,25 +100,9 @@ export const usePro = () => {
     }
   }, [monthlyPlan, lifetimePlan]);
 
-  const restorePurchases = useCallback(async (): Promise<{ success: boolean; wasPro: boolean }> => {
-    setRestoring(true);
-    try {
-      if (Capacitor.isNativePlatform()) {
-        const result = await rcRestore();
-        if (result.success && result.wasPro) { setIsPro(true); saveLocalPro(true); }
-        return result;
-      }
-      return { success: true, wasPro: false };
-    } catch {
-      return { success: false, wasPro: false };
-    } finally {
-      setRestoring(false);
-    }
-  }, []);
-
   return {
-    isPro, purchasing, restoring, offeringsLoading,
+    isPro, purchasing, offeringsLoading,
     monthlyPlan, lifetimePlan,
-    purchasePlan, restorePurchases,
+    purchasePlan,
   };
 };
