@@ -306,7 +306,7 @@ const ConfirmationModal: React.FC<{ isOpen: boolean; title: string; message: str
     );
 };
 
-const StatusPage: React.FC<{ player: Player; onRename: (name: string) => void; onLoginPress?: () => void; userEmail?: string; onSignOut?: () => void }> = ({ player, onRename, onLoginPress, userEmail, onSignOut }) => (<div className="w-full h-full"><PlayerStats player={player} onRename={onRename} onLoginPress={onLoginPress} userEmail={userEmail} onSignOut={onSignOut} /></div>);
+const StatusPage: React.FC<{ player: Player; onRename: (name: string) => void }> = ({ player, onRename }) => (<div className="w-full h-full"><PlayerStats player={player} onRename={onRename} /></div>);
 
 const AchievementsPage: React.FC<{ achievements: Record<string, Achievement> }> = ({ achievements }) => {
     const list: Achievement[] = Object.values(achievements);
@@ -840,7 +840,7 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
 
                 </div>
             );
-            case 'status': return <StatusPage player={data.player} onRename={data.renamePlayer} onLoginPress={!userEmail ? () => setShowAuthModal(true) : undefined} userEmail={userEmail} onSignOut={userEmail ? handleSignOut : undefined} />;
+            case 'status': return <StatusPage player={data.player} onRename={data.renamePlayer} />;
             case 'achievements': return <AchievementsPage achievements={data.achievements} />;
             case 'quests': return <QuestLogPage quests={data.quests} onComplete={handleCompleteQuest} onDelete={id => setConfirm({ title: 'Erase Entry', message: 'Permanently purge this quest record?', isDangerous: true, onConfirm: () => data.deleteQuest(id) })} onFail={id => data.failQuest(id)} onAddQuest={data.addQuest} onWatchAdForQuest={handleWatchAdForQuest} />;
             case 'skills': return <SkillsPage skills={data.skills} skillFolders={data.skillFolders} categories={data.categories} improveSkill={data.improveSkill} addSkill={data.addSkill} addSkillFolder={data.addSkillFolder} addCategory={data.addCategory} onDeleteSkill={data.deleteSkill} onDeleteSkillFolder={data.deleteSkillFolder} onDeleteCategory={data.deleteCategory} />;
@@ -850,7 +850,7 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
             case 'workshop': return <WorkshopPage inventory={data.inventory} onEnhance={data.enhanceGear} onAdvance={data.advanceGear} player={data.player} />;
             case 'shop': return <ShopPage player={data.player} inventory={data.inventory} onBuyItem={i => setConfirm({ title: 'System Exchange', message: `Authorize coin transfer for ${i.name}?`, onConfirm: () => data.buyItem(i) })} />;
             case 'inventory': return <InventoryPageWrapper inventory={data.inventory} player={data.player} onEquip={data.equipItem} onUnequip={data.unequipItem} onBreak={slot => setConfirm({ title: 'Break Curse', message: 'Permanently destroy cursed equipment using Light Orb?', isDangerous: true, onConfirm: () => data.breakGear(slot) })} />;
-            case 'codex': return <Codex onOpenExport={data.exportState} onOpenImport={data.importState} onSetBackground={() => {}} background={null} onNavigateToReport={() => navigateTo('report')} />;
+            case 'codex': return <Codex onOpenExport={data.exportState} onOpenImport={data.importState} onSetBackground={() => {}} background={null} onNavigateToReport={() => navigateTo('report')} onLoginPress={!userEmail ? () => setShowAuthModal(true) : undefined} userEmail={userEmail} onSignOut={userEmail ? handleSignOut : undefined} />;
             case 'report': return <ReportExport player={data.player} completedQuests={data.completedQuests} dungeonHistory={data.dungeonHistory} achievements={data.achievements} inventory={data.inventory} onUpgradePro={() => handleShowUpgrade('System Reports')} />;
             default: return null;
         }
