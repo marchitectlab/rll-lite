@@ -7,9 +7,6 @@ export default defineConfig({
   base: './',
   build: {
     outDir: 'dist',
-    rollupOptions: {
-      external: ['@revenuecat/purchases-capacitor'],
-    },
   },
   resolve: {
     alias: {
