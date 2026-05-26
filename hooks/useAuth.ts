@@ -50,12 +50,17 @@ export const useAuth = () => {
     }
   }, []);
 
+
+
   const signIn = useCallback(async (email: string, password: string) => {
     setAuthState(s => ({ ...s, loading: true, error: null }));
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setAuthState(s => ({ ...s, loading: false, error: error.message }));
+        const msg = error.message.toLowerCase().includes('fetch') || error.message.toLowerCase().includes('network')
+          ? 'Connection failed. Check your internet and try again.'
+          : error.message;
+        setAuthState(s => ({ ...s, loading: false, error: msg }));
         return false;
       }
       setAuthState(s => ({ ...s, loading: false }));

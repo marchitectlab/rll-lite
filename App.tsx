@@ -704,7 +704,7 @@ interface AppProps {
 
 const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onResetPassword, authError, onClearAuthError, authLoading }) => {
     const data = usePlayerData();
-    const { isPro, purchasing, restoring, purchasePro, restorePurchases } = usePro();
+    const { isPro, purchasing, restoring, offeringsLoading, monthlyPlan, lifetimePlan, purchasePlan, restorePurchases } = usePro();
     const [page, setPage] = useState<Page | 'startup'>('startup');
     const handleSignOut = useCallback(async () => {
         await onSignOut();
@@ -965,10 +965,13 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
             {showPurchaseModal && (
                 <ProPurchaseModal
                     onClose={() => setShowPurchaseModal(false)}
-                    onPurchase={purchasePro}
+                    onPurchase={purchasePlan}
                     onRestore={restorePurchases}
                     purchasing={purchasing}
                     restoring={restoring}
+                    offeringsLoading={offeringsLoading}
+                    monthlyPlan={monthlyPlan}
+                    lifetimePlan={lifetimePlan}
                 />
             )}
             {showAuthModal && (

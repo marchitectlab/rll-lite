@@ -1,72 +1,96 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { Capacitor } from '@capacitor/core';
+import { getOfferings, purchasePackage, restorePurchases as rcRestore, checkIsPro } from '../lib/revenuecat';
+import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 const PRO_STORAGE_KEY = 'rll_is_pro';
 
 const loadLocalPro = (): boolean => {
   try { return localStorage.getItem(PRO_STORAGE_KEY) === 'true'; } catch { return false; }
 };
-
 const saveLocalPro = (val: boolean) => {
   try { localStorage.setItem(PRO_STORAGE_KEY, val ? 'true' : 'false'); } catch {}
+};
+
+export type ProPlan = {
+  label: string;
+  price: string;
+  period: string;
+  pkg: PurchasesPackage | null;
 };
 
 export const usePro = () => {
   const [isPro, setIsPro] = useState<boolean>(loadLocalPro);
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [offeringsLoading, setOfferingsLoading] = useState(Capacitor.isNativePlatform());
 
-  // On mount, sync from Supabase user metadata
+  const [monthlyPlan, setMonthlyPlan] = useState<ProPlan>({
+    label: 'Monthly', price: '$0.99', period: '/month', pkg: null,
+  });
+  const [lifetimePlan, setLifetimePlan] = useState<ProPlan>({
+    label: 'Lifetime', price: '$3.99', period: 'one-time', pkg: null,
+  });
+
   useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user?.user_metadata?.is_pro === true) {
-          setIsPro(true);
-          saveLocalPro(true);
+        const offerings = await getOfferings();
+        if (offerings?.current) {
+          const pkgs = offerings.current.availablePackages;
+          const monthly = pkgs.find(p =>
+            p.packageType === 'MONTHLY' ||
+            p.identifier.toLowerCase().includes('month')
+          ) ?? pkgs[0] ?? null;
+          const lifetime = pkgs.find(p =>
+            p.packageType === 'LIFETIME' ||
+            p.identifier.toLowerCase().includes('lifetime')
+          ) ?? pkgs.find(p =>
+            p.packageType === 'ANNUAL' ||
+            p.identifier.toLowerCase().includes('annual')
+          ) ?? (pkgs.length > 1 ? pkgs[1] : null);
+
+          if (monthly) setMonthlyPlan({
+            label: 'Monthly', price: monthly.product.priceString, period: '/month', pkg: monthly,
+          });
+          if (lifetime) setLifetimePlan({
+            label: 'Lifetime', price: lifetime.product.priceString, period: 'one-time', pkg: lifetime,
+          });
         }
+        const pro = await checkIsPro();
+        if (pro) { setIsPro(true); saveLocalPro(true); }
       } catch {}
+      setOfferingsLoading(false);
     })();
   }, []);
 
-  const syncProToSupabase = useCallback(async (val: boolean) => {
-    try {
-      await supabase.auth.updateUser({ data: { is_pro: val } });
-    } catch {}
-  }, []);
-
-  const activatePro = useCallback(async () => {
-    setIsPro(true);
-    saveLocalPro(true);
-    await syncProToSupabase(true);
-  }, [syncProToSupabase]);
-
-  // Attempt native in-app purchase; falls back to direct activation for dev/web/sideloaded builds
-  const purchasePro = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+  const purchasePlan = useCallback(async (plan: 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
     setPurchasing(true);
     try {
-      // On a real native build connected to Google Play, you would call the
-      // Play Billing API here (e.g. via a RevenueCat Capacitor plugin or
-      // your own billing integration). For now we activate directly so the
-      // full UI/UX flow works on dev, web, and sideloaded APKs.
-      await activatePro();
+      const planData = plan === 'monthly' ? monthlyPlan : lifetimePlan;
+      if (Capacitor.isNativePlatform() && planData.pkg) {
+        const result = await purchasePackage(planData.pkg);
+        if (result.success) { setIsPro(true); saveLocalPro(true); }
+        return result;
+      }
+      setIsPro(true);
+      saveLocalPro(true);
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e?.message ?? 'Purchase failed' };
     } finally {
       setPurchasing(false);
     }
-  }, [activatePro]);
+  }, [monthlyPlan, lifetimePlan]);
 
   const restorePurchases = useCallback(async (): Promise<{ success: boolean; wasPro: boolean }> => {
     setRestoring(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const cloudPro = user?.user_metadata?.is_pro === true;
-      if (cloudPro) {
-        setIsPro(true);
-        saveLocalPro(true);
-        return { success: true, wasPro: true };
+      if (Capacitor.isNativePlatform()) {
+        const result = await rcRestore();
+        if (result.success && result.wasPro) { setIsPro(true); saveLocalPro(true); }
+        return result;
       }
       return { success: true, wasPro: false };
     } catch {
@@ -76,5 +100,9 @@ export const usePro = () => {
     }
   }, []);
 
-  return { isPro, purchasing, restoring, purchasePro, restorePurchases };
+  return {
+    isPro, purchasing, restoring, offeringsLoading,
+    monthlyPlan, lifetimePlan,
+    purchasePlan, restorePurchases,
+  };
 };
