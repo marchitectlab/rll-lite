@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">R.L.L Lite</string>
+    <string name="title_activity_main">R.L.L Lite</string>
+    <string name="package_name">com.rll.mobile</string>
+    <string name="custom_url_scheme">com.rll.mobile</string>
+</resources>
