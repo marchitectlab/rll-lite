@@ -1,7 +1,7 @@
 import { Purchases, LOG_LEVEL, PurchasesPackage, CustomerInfo } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 
-export const REVENUECAT_API_KEY = 'test_maMzaOVNlYsFIMLkAteqNDwlERW';
+export const REVENUECAT_API_KEY = 'goog_KgAFOsBJYohudnACLWCIbgABOSu';
 export const ENTITLEMENT_ID = 'pro';
 
 export async function initializeRevenueCat(userId?: string): Promise<void> {
