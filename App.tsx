@@ -382,7 +382,7 @@ const DungeonsPage: React.FC<{
     dungeonKeys: DungeonKeys;
 }> = ({ onStartDungeon, activeDungeon, dungeonCooldowns, onClearDungeon, onFailDungeon, onProgressDungeon, dungeonHistory, playerLevel, dungeonKeys }) => {
     const [selectedRank, setSelectedRank] = useState<Difficulty | null>(null);
-    const [view, setView] = useState<'gates' | 'cooldowns'>('gates');
+    const [view, setView] = useState<'gates' | 'cooldowns' | 'history'>('gates');
 
     if (activeDungeon) {
         const dungeon = DUNGEONS.find(d => d.id === activeDungeon.dungeonId)!;
@@ -390,31 +390,31 @@ const DungeonsPage: React.FC<{
         const isCompletionReady = activeDungeon.currentFloorIndex >= dungeon.floors.length - 1 && activeDungeon.currentTaskIndex >= currentFloor.tasks.length;
 
         return (
-            <div className="glass-panel p-8 rounded-lg border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
-                <div className="flex justify-between items-center mb-8">
-                    <h2 className="font-orbitron text-2xl text-red-500 uppercase tracking-tighter font-black">GATE: {dungeon.name}</h2>
+            <div className="glass-panel p-4 md:p-8 rounded-lg border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="font-orbitron text-lg md:text-2xl text-red-500 uppercase tracking-tighter font-black">GATE: {dungeon.name}</h2>
                     <div className="flex flex-col items-end">
                         <div className="text-gray-400 font-orbitron text-xs font-bold uppercase tracking-widest">FLOOR {activeDungeon.currentFloorIndex + 1} / {dungeon.floors.length}</div>
-                        {!isCompletionReady && <div className="text-[10px] text-red-400 font-black mt-1 uppercase">OBJECTIVE {activeDungeon.currentTaskIndex + 1} / {currentFloor.tasks.length}</div>}
+                        {!isCompletionReady && <div className="text-[10px] text-red-400 font-black mt-1 uppercase">OBJ {activeDungeon.currentTaskIndex + 1} / {currentFloor.tasks.length}</div>}
                     </div>
                 </div>
-                
-                <div className="min-h-[250px] mb-8">
+
+                <div className="min-h-[220px] mb-6">
                     {isCompletionReady ? (
-                        <div className="text-center py-12">
-                            <h3 className="font-orbitron text-4xl text-green-400 mb-4 neon-text">GATE OPENED</h3>
-                            <p className="text-gray-400 mb-8 uppercase tracking-[0.2em] text-[10px] font-black">All floors cleared. Core extracted. ready for extraction.</p>
-                            <button onClick={onClearDungeon} className="bg-green-600 px-12 py-4 rounded text-xs font-black uppercase tracking-widest shadow-[0_0_20px_rgba(34,197,94,0.5)] hover:scale-105 transition-transform">Claim Rewards</button>
+                        <div className="text-center py-10">
+                            <h3 className="font-orbitron text-3xl text-green-400 mb-4 neon-text">GATE OPENED</h3>
+                            <p className="text-gray-400 mb-8 uppercase tracking-[0.2em] text-[10px] font-black">All floors cleared. Core extracted. Ready for extraction.</p>
+                            <button onClick={onClearDungeon} className="bg-green-600 px-10 py-4 rounded text-xs font-black uppercase tracking-widest shadow-[0_0_20px_rgba(34,197,94,0.5)] hover:scale-105 transition-transform">Claim Rewards</button>
                         </div>
                     ) : (
-                        <div className="space-y-6">
-                            <div className="border-b border-white/10 pb-4 mb-6">
-                                <h3 className="font-orbitron text-xl text-blue-300 uppercase tracking-wide">{currentFloor.name}</h3>
+                        <div className="space-y-4">
+                            <div className="border-b border-white/10 pb-3 mb-4">
+                                <h3 className="font-orbitron text-lg text-blue-300 uppercase tracking-wide">{currentFloor.name}</h3>
                             </div>
-                            <h4 className="font-orbitron text-2xl text-white uppercase tracking-wide">{currentFloor.tasks[activeDungeon.currentTaskIndex].page.title}</h4>
+                            <h4 className="font-orbitron text-xl text-white uppercase tracking-wide">{currentFloor.tasks[activeDungeon.currentTaskIndex].page.title}</h4>
                             <p className="text-gray-400 italic text-sm border-l-2 border-white/10 pl-4">"{currentFloor.tasks[activeDungeon.currentTaskIndex].page.narrative}"</p>
-                            <div className="bg-black/40 p-6 border border-white/5 rounded-sm mt-8">
-                                <p className="text-white font-black uppercase tracking-[0.2em] text-xs mb-2 text-blue-400">System Instruction:</p>
+                            <div className="bg-black/40 p-5 border border-white/5 rounded-sm mt-6">
+                                <p className="text-blue-400 font-black uppercase tracking-[0.2em] text-xs mb-2">System Instruction:</p>
                                 <p className="text-white font-bold uppercase tracking-widest text-base">{currentFloor.tasks[activeDungeon.currentTaskIndex].description}</p>
                             </div>
                         </div>
@@ -422,9 +422,9 @@ const DungeonsPage: React.FC<{
                 </div>
 
                 {!isCompletionReady && (
-                    <div className="flex gap-4">
-                        <button onClick={onFailDungeon} className="bg-red-900/60 hover:bg-red-800 px-6 py-3 rounded text-[10px] font-black uppercase tracking-widest border border-red-500/30 transition-colors">Abandon</button>
-                        <button onClick={onProgressDungeon} className="flex-grow bg-blue-600 hover:bg-blue-500 px-6 py-3 rounded text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(56,189,248,0.3)] transition-all">Task Completed</button>
+                    <div className="flex gap-3">
+                        <button onClick={onFailDungeon} className="bg-red-900/60 hover:bg-red-800 px-5 py-3 rounded text-[10px] font-black uppercase tracking-widest border border-red-500/30 transition-colors">Abandon</button>
+                        <button onClick={onProgressDungeon} className="flex-grow bg-blue-600 hover:bg-blue-500 px-5 py-3 rounded text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(56,189,248,0.3)] transition-all">Task Completed</button>
                     </div>
                 )}
             </div>
@@ -432,26 +432,73 @@ const DungeonsPage: React.FC<{
     }
 
     const renderSubNav = () => (
-        <div className="flex gap-8 border-b border-blue-500/20 mb-8">
-            <button onClick={() => setView('gates')} className={`font-orbitron text-sm uppercase tracking-[0.3em] font-black pb-3 transition-all ${view === 'gates' ? 'text-blue-400 border-b-2 border-blue-400 neon-text' : 'text-gray-500 hover:text-gray-300'}`}>GATES</button>
-            <button onClick={() => setView('cooldowns')} className={`font-orbitron text-sm uppercase tracking-[0.3em] font-black pb-3 transition-all ${view === 'cooldowns' ? 'text-blue-400 border-b-2 border-blue-400 neon-text' : 'text-gray-500 hover:text-gray-300'}`}>COOLDOWNS</button>
+        <div className="flex gap-6 border-b border-blue-500/20 mb-6 overflow-x-auto no-scrollbar">
+            {(['gates', 'cooldowns', 'history'] as const).map(v => (
+                <button key={v} onClick={() => { setView(v); setSelectedRank(null); }} className={`font-orbitron text-xs uppercase tracking-[0.2em] font-black pb-3 whitespace-nowrap transition-all flex-shrink-0 ${view === v ? 'text-blue-400 border-b-2 border-blue-400 neon-text' : 'text-gray-500 hover:text-gray-300'}`}>{v === 'history' ? 'RUN LOG' : v}</button>
+            ))}
         </div>
     );
+
+    const KeysBadge = ({ small }: { small?: boolean }) => (
+        <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-sm w-fit ${dungeonKeys.count <= 0 ? 'border-red-500/40 bg-red-950/20' : 'border-yellow-500/30 bg-black/40'}`}>
+            <svg className={`${small ? 'w-3 h-3' : 'w-4 h-4'} ${dungeonKeys.count <= 0 ? 'text-red-400' : 'text-yellow-400'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+            <span className={`font-orbitron ${small ? 'text-[10px]' : 'text-xs'} font-black ${dungeonKeys.count <= 0 ? 'text-red-400' : 'text-yellow-400'}`}>{dungeonKeys.count}/{DUNGEON_KEYS_PER_DAY} Keys</span>
+        </div>
+    );
+
+    if (view === 'history') {
+        const sorted = [...dungeonHistory].sort((a, b) => b.completedAt - a.completedAt);
+        return (
+            <div className="space-y-4">
+                {renderSubNav()}
+                <h2 className="font-orbitron text-xl text-blue-400 uppercase tracking-widest font-black">DUNGEON RUN LOG</h2>
+                {sorted.length === 0 ? (
+                    <div className="text-center py-20 bg-black/20 border border-white/5 rounded-sm">
+                        <p className="font-orbitron text-gray-700 uppercase font-black tracking-[0.3em] text-sm">No runs recorded yet.</p>
+                        <p className="text-gray-600 text-[10px] uppercase tracking-wider mt-2">Complete a gate to see your history here.</p>
+                    </div>
+                ) : (
+                    <div className="space-y-2">
+                        {sorted.map(entry => {
+                            const styles = getGradeStyles(entry.grade);
+                            const date = new Date(entry.completedAt);
+                            const dateStr = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                            const timeStr = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                            return (
+                                <div key={entry.id} className={`glass-panel px-4 py-3 rounded border flex items-center justify-between ${entry.status === 'cleared' ? styles.border : 'border-red-900/40'}`}>
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <span className={`font-orbitron text-xs font-black flex-shrink-0 ${entry.status === 'cleared' ? styles.text : 'text-red-500'}`}>[{entry.grade}]</span>
+                                        <div className="min-w-0">
+                                            <p className="font-orbitron text-xs font-black text-white uppercase truncate">{entry.name}</p>
+                                            <p className="text-[9px] text-gray-600 uppercase font-black tracking-widest">{dateStr} · {timeStr}</p>
+                                        </div>
+                                    </div>
+                                    <span className={`font-orbitron text-[9px] font-black uppercase tracking-widest flex-shrink-0 ml-3 px-2 py-1 rounded-sm ${entry.status === 'cleared' ? 'text-green-400 bg-green-950/40 border border-green-800/30' : 'text-red-400 bg-red-950/40 border border-red-800/30'}`}>
+                                        {entry.status === 'cleared' ? '✓ Cleared' : '✗ Failed'}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     if (view === 'cooldowns') {
         const dungeonsOnCooldown = Object.entries(dungeonCooldowns).filter(([_, data]) => data.readyAt > Date.now());
         return (
-            <div className="space-y-6">
+            <div className="space-y-4">
                 {renderSubNav()}
-                <h2 className="font-orbitron text-xl text-blue-400 uppercase tracking-widest font-black mb-6">RESTRICTED ACCESS</h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <h2 className="font-orbitron text-xl text-blue-400 uppercase tracking-widest font-black mb-4">RESTRICTED ACCESS</h2>
+                <div className="grid grid-cols-1 gap-3">
                     {dungeonsOnCooldown.length > 0 ? dungeonsOnCooldown.map(([id, data]) => {
                         const dungeon = DUNGEONS.find(d => d.id === id);
                         if (!dungeon) return null;
                         const styles = getGradeStyles(dungeon.grade);
                         const refreshDate = new Date(data.readyAt).toLocaleDateString();
                         return (
-                            <div key={id} className="glass-panel p-5 rounded border border-red-500/20 bg-red-950/10 flex items-center justify-between opacity-80">
+                            <div key={id} className="glass-panel p-4 rounded border border-red-500/20 bg-red-950/10 flex items-center justify-between opacity-80">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className={`font-orbitron text-[9px] font-black ${styles.text}`}>[{dungeon.grade}]</span>
@@ -465,8 +512,8 @@ const DungeonsPage: React.FC<{
                             </div>
                         );
                     }) : (
-                        <div className="col-span-full text-center py-20 bg-black/20 border border-white/5 rounded-sm">
-                             <p className="font-orbitron text-gray-700 uppercase font-black tracking-[0.3em]">No gates currently on cooldown.</p>
+                        <div className="text-center py-16 bg-black/20 border border-white/5 rounded-sm">
+                            <p className="font-orbitron text-gray-700 uppercase font-black tracking-[0.3em]">No gates currently on cooldown.</p>
                         </div>
                     )}
                 </div>
@@ -477,36 +524,32 @@ const DungeonsPage: React.FC<{
     if (!selectedRank) {
         const ranks = [DifficultyEnum.E, DifficultyEnum.D, DifficultyEnum.C, DifficultyEnum.B, DifficultyEnum.A, DifficultyEnum.S, DifficultyEnum.S_PLUS];
         return (
-            <div className="space-y-6">
+            <div className="space-y-4">
                 {renderSubNav()}
-                <div className="flex items-center justify-between mb-8 border-b border-blue-500/20 pb-4">
-                    <h2 className="font-orbitron text-2xl text-blue-400 uppercase tracking-widest font-black">GATE CLASSIFICATIONS</h2>
-                    <div className="flex items-center gap-2 bg-black/40 border border-yellow-500/30 px-4 py-2 rounded">
-                        <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M3 10h18v2H3zm0 4h18v2H3zm3-8l3 2-3 2-3-2 3-2zm12 0l3 2-3 2-3-2 3-2z"/></svg>
-                        <span className="font-orbitron text-xs font-black text-yellow-400">{dungeonKeys.count}/{DUNGEON_KEYS_PER_DAY}</span>
-                        <span className="font-orbitron text-[9px] font-black text-gray-500 uppercase tracking-widest">Keys</span>
-                    </div>
+                <div className="mb-4 border-b border-blue-500/20 pb-4">
+                    <h2 className="font-orbitron text-xl text-blue-400 uppercase tracking-widest font-black mb-3">GATE CLASSIFICATIONS</h2>
+                    <KeysBadge />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     {ranks.map(rank => {
                         const styles = getGradeStyles(rank);
                         const count = DUNGEONS.filter(d => d.grade === rank).length;
                         const levelReq = DUNGEON_LEVEL_REQUIREMENTS[rank] || 1;
                         const isLevelLocked = playerLevel < levelReq;
                         return (
-                            <button key={rank} onClick={() => !isLevelLocked && setSelectedRank(rank)} disabled={isLevelLocked} className={`glass-panel p-8 rounded border transition-all duration-300 group text-center flex flex-col items-center relative ${isLevelLocked ? 'opacity-50 cursor-not-allowed border-gray-700' : `hover:scale-105 ${styles.border} ${styles.glow}`}`}>
+                            <button key={rank} onClick={() => !isLevelLocked && setSelectedRank(rank)} disabled={isLevelLocked} className={`glass-panel p-5 rounded border transition-all duration-300 group text-center flex flex-col items-center relative ${isLevelLocked ? 'opacity-50 cursor-not-allowed border-gray-700' : `hover:scale-105 ${styles.border} ${styles.glow}`}`}>
                                 {isLevelLocked && (
-                                    <div className="absolute top-2 right-2 bg-gray-800/90 border border-gray-600 px-2 py-1 rounded flex items-center gap-1">
-                                        <svg className="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1C8.676 1 6 3.676 6 7v1H4v15h16V8h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 110 4 2 2 0 010-4z"/></svg>
-                                        <span className="font-orbitron text-[8px] font-black text-gray-400">LVL {levelReq}</span>
+                                    <div className="absolute top-2 right-2 bg-gray-800/90 border border-gray-600 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                        <svg className="w-2.5 h-2.5 text-gray-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1C8.676 1 6 3.676 6 7v1H4v15h16V8h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 110 4 2 2 0 010-4z"/></svg>
+                                        <span className="font-orbitron text-[7px] font-black text-gray-400">LV {levelReq}</span>
                                     </div>
                                 )}
-                                <span className={`font-orbitron text-5xl font-black mb-3 ${isLevelLocked ? 'text-gray-600' : styles.text}`}>[{rank}]</span>
-                                <span className="font-orbitron text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-4">Rank Gates</span>
+                                <span className={`font-orbitron text-4xl font-black mb-2 ${isLevelLocked ? 'text-gray-600' : styles.text}`}>[{rank}]</span>
+                                <span className="font-orbitron text-[9px] font-black text-white/40 uppercase tracking-[0.2em] mb-3">Rank Gates</span>
                                 {isLevelLocked ? (
-                                    <span className="bg-red-900/30 border border-red-500/30 px-4 py-1 rounded-full text-[9px] font-bold text-red-400 uppercase tracking-widest">Locked — Lvl {levelReq}</span>
+                                    <span className="bg-red-900/30 border border-red-500/30 px-2 py-0.5 rounded-full text-[8px] font-bold text-red-400 uppercase tracking-widest">Lv {levelReq} Req</span>
                                 ) : (
-                                    <span className="bg-white/5 px-4 py-1 rounded-full text-[9px] font-bold text-gray-500 uppercase tracking-widest">{count} Available</span>
+                                    <span className="bg-white/5 px-3 py-0.5 rounded-full text-[8px] font-bold text-gray-500 uppercase tracking-widest">{count} Available</span>
                                 )}
                             </button>
                         );
@@ -522,19 +565,15 @@ const DungeonsPage: React.FC<{
     const noKeysLeft = dungeonKeys.count <= 0;
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center mb-8 border-b border-blue-500/20 pb-4">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => setSelectedRank(null)} className="text-blue-400 hover:text-blue-200 transition-colors">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+        <div className="space-y-4">
+            <div className="mb-4 border-b border-blue-500/20 pb-4">
+                <div className="flex items-center gap-3 mb-3">
+                    <button onClick={() => setSelectedRank(null)} className="text-blue-400 hover:text-blue-200 transition-colors flex-shrink-0">
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
                     </button>
-                    <h2 className="font-orbitron text-2xl text-blue-400 uppercase tracking-widest font-black">[{selectedRank}] RANK GATES</h2>
+                    <h2 className="font-orbitron text-lg text-blue-400 uppercase tracking-widest font-black">[{selectedRank}] RANK GATES</h2>
                 </div>
-                <div className={`flex items-center gap-2 border px-3 py-1.5 rounded ${noKeysLeft ? 'border-red-500/40 bg-red-950/20' : 'border-yellow-500/30 bg-black/40'}`}>
-                    <svg className={`w-4 h-4 ${noKeysLeft ? 'text-red-400' : 'text-yellow-400'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
-                    <span className={`font-orbitron text-xs font-black ${noKeysLeft ? 'text-red-400' : 'text-yellow-400'}`}>{dungeonKeys.count}/{DUNGEON_KEYS_PER_DAY}</span>
-                    <span className="font-orbitron text-[9px] font-black text-gray-500 uppercase tracking-widest">Keys</span>
-                </div>
+                <KeysBadge />
             </div>
             {noKeysLeft && (
                 <div className="bg-red-950/20 border border-red-500/30 rounded p-4 text-center">
@@ -542,35 +581,35 @@ const DungeonsPage: React.FC<{
                     <p className="text-gray-500 text-[10px] uppercase tracking-wider mt-1">Keys reset at midnight. Come back tomorrow.</p>
                 </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-4">
                 {filteredDungeons.map(d => {
                     const cooldown = dungeonCooldowns[d.id];
                     const isOnCooldown = cooldown && cooldown.readyAt > Date.now();
                     const isBlocked = isOnCooldown || gradeIsLevelLocked || noKeysLeft;
                     return (
-                        <div key={d.id} className={`glass-panel p-6 rounded border transition-all duration-500 ${isBlocked ? 'opacity-60' : 'hover:-translate-y-1'} ${styles.border} ${styles.glow} group`}>
-                            <div className="flex justify-between items-start mb-4">
-                                <div>
+                        <div key={d.id} className={`glass-panel p-5 rounded border transition-all duration-500 ${isBlocked ? 'opacity-60' : 'hover:-translate-y-0.5'} ${styles.border} ${styles.glow} group`}>
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="min-w-0 flex-1 pr-2">
                                     <div className="flex items-center gap-2 mb-1">
-                                        <span className={`font-orbitron text-xs font-black ${styles.text}`}>[{d.grade}]</span>
-                                        <h3 className="font-orbitron text-sm font-black text-white uppercase">{d.name}</h3>
+                                        <span className={`font-orbitron text-xs font-black flex-shrink-0 ${styles.text}`}>[{d.grade}]</span>
+                                        <h3 className="font-orbitron text-sm font-black text-white uppercase truncate">{d.name}</h3>
                                     </div>
                                     <p className="text-gray-500 text-[10px] uppercase tracking-tighter">{d.description}</p>
                                 </div>
                             </div>
-                            <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
+                            <div className="flex justify-between items-center mt-3 pt-3 border-t border-white/5">
                                 <div className="text-[9px] text-gray-500 uppercase font-black">{d.floors.length} FLOORS</div>
                                 {isOnCooldown ? (
                                     <span className="text-[9px] text-red-400 font-black uppercase tracking-widest">ON COOLDOWN</span>
                                 ) : gradeIsLevelLocked ? (
                                     <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-1">
-                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1C8.676 1 6 3.676 6 7v1H4v15h16V8h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 110 4 2 2 0 010-4z"/></svg>
-                                        Lvl {DUNGEON_LEVEL_REQUIREMENTS[d.grade]} Required
+                                        <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1C8.676 1 6 3.676 6 7v1H4v15h16V8h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 110 4 2 2 0 010-4z"/></svg>
+                                        Lv {DUNGEON_LEVEL_REQUIREMENTS[d.grade]} Required
                                     </span>
                                 ) : noKeysLeft ? (
                                     <span className="text-[9px] text-red-400 font-black uppercase tracking-widest">No Keys Left</span>
                                 ) : (
-                                    <button onClick={() => onStartDungeon(d)} className={`px-4 py-2 rounded text-[9px] font-black uppercase tracking-widest border transition-all ${styles.border} ${styles.text} hover:bg-white/5`}>Enter Gate</button>
+                                    <button onClick={() => onStartDungeon(d)} className={`px-4 py-1.5 rounded text-[9px] font-black uppercase tracking-widest border transition-all ${styles.border} ${styles.text} hover:bg-white/5`}>Enter Gate</button>
                                 )}
                             </div>
                         </div>
@@ -901,7 +940,10 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
     }
 
     return (
-        <div className="h-screen bg-[#020617] text-white font-sans flex flex-col lg:flex-row overflow-hidden pb-16 lg:pb-0">
+        <div
+            className="root-bottom-pad bg-[#020617] text-white font-sans flex flex-col lg:flex-row overflow-hidden lg:pb-0"
+            style={{ height: '100%', paddingBottom: 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+        >
             <NotificationManager notifications={data.notifications} />
 
             {/* Desktop Sidebar */}
@@ -941,8 +983,12 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
                 </footer>
             </aside>
 
-            {/* Mobile Top Header */}
-            <div className="lg:hidden fixed top-0 left-0 right-0 bg-slate-950/90 backdrop-blur-md border-b border-blue-500/10 z-[100] px-4 py-3 flex justify-between items-center shadow-lg h-14">
+            {/* Mobile Top Header — padded for status bar */}
+            <div
+                className="lg:hidden fixed top-0 left-0 right-0 bg-slate-950/90 backdrop-blur-md border-b border-blue-500/10 z-[100] shadow-lg"
+                style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+            >
+            <div className="h-14 px-4 flex justify-between items-center">
                 <div className="flex items-center gap-2">
                     {page !== 'menu' && (
                          <button onClick={() => navigateTo('menu')} className="text-blue-500 p-1">
@@ -965,15 +1011,22 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
                     )}
                 </div>
             </div>
+            </div>
 
-            <main className="flex-grow overflow-y-auto custom-scrollbar pt-14 lg:pt-0">
+            <main
+                className="mobile-main flex-grow overflow-y-auto overflow-x-hidden custom-scrollbar lg:pt-0"
+                style={{ paddingTop: 'calc(3.5rem + env(safe-area-inset-top, 0px))' }}
+            >
                 <div className={page === 'status' ? 'w-full h-full p-2 md:p-4 lg:p-12' : 'max-w-6xl mx-auto p-4 md:p-6 lg:p-16 border-none rounded-none'}>
                     {render()}
                 </div>
             </main>
 
-            {/* Mobile Bottom Navigation */}
-            <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-lg border-t border-blue-500/10 z-[110] shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
+            {/* Mobile Bottom Navigation — padded for nav bar */}
+            <nav
+                className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-lg border-t border-blue-500/10 z-[110] shadow-[0_-10px_30px_rgba(0,0,0,0.5)]"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            >
                 {/* Pro Version Banner above bottom nav — hidden when Pro */}
                 {!isPro && (
                     <div className="px-3 pt-1.5 pb-0 border-b border-blue-500/5">

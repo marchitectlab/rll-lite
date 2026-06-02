@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Real Life Leveling</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -180,6 +180,21 @@
       }
       .animate-train-pulse {
         animation: train-pulse 0.7s ease-in-out;
+      }
+
+      /* Safe area for notched/edge-to-edge Android */
+      :root {
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      html, body, #root {
+        height: 100%;
+        overflow-x: hidden;
+      }
+      /* On large screens the fixed mobile header doesn't exist */
+      @media (min-width: 1024px) {
+        .mobile-main { padding-top: 0 !important; }
+        .root-bottom-pad { padding-bottom: 0 !important; }
       }
 
       .custom-scrollbar::-webkit-scrollbar { width: 4px; }
