@@ -247,6 +247,11 @@ export type PlayerDataEvent =
     | { type: 'dungeon_started'; name: string; grade: Difficulty; }
     | { type: 'level_up'; level: number; rank: Rank; };
 
+export interface DungeonKeys {
+  count: number;
+  lastResetDate: string; // YYYY-MM-DD
+}
+
 export interface PlayerDataState {
   dataVersion?: number;
   player: Player;
@@ -263,6 +268,7 @@ export interface PlayerDataState {
   weeklyPlan: WeeklyPlan;
   events: PlayerDataEvent[];
   notifications: SystemNotification[];
+  dungeonKeys: DungeonKeys;
 }
 
 // Added missing Saga and Spiritual Realm types

@@ -101,7 +101,21 @@ export const RANK_LEVEL_REQUIREMENTS: Record<Difficulty, number> = {
 
 export const getLevelRequirement = (rank: Difficulty): number => {
     return RANK_LEVEL_REQUIREMENTS[rank] || 0;
+}
+
+// --- DUNGEON LEVEL LOCKS ---
+export const DUNGEON_LEVEL_REQUIREMENTS: Record<Difficulty, number> = {
+  [Difficulty.E]: 1,
+  [Difficulty.D]: 5,
+  [Difficulty.C]: 10,
+  [Difficulty.B]: 15,
+  [Difficulty.A]: 30,
+  [Difficulty.S]: 50,
+  [Difficulty.S_PLUS]: 50,
+  [Difficulty.X]: 50,
 };
+
+export const DUNGEON_KEYS_PER_DAY = 2;
 
 export const QUEST_COIN_REWARDS: Record<Difficulty, number> = {
   [Difficulty.E]: 1, [Difficulty.D]: 2, [Difficulty.C]: 3, [Difficulty.B]: 5,

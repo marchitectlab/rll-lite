@@ -7,9 +7,9 @@ import { usePlayerData } from './hooks/usePlayerData';
 import { usePro } from './hooks/usePro';
 import { QuestHistory } from './components/QuestHistory';
 import { ProPurchaseModal } from './components/ProPurchaseModal';
-import type { Player, Quest, Difficulty, ActiveDungeonState, DungeonCooldown, DungeonHistoryEntry, Achievement, ShopItem, Inventory, EquipmentSlot, SystemNotification, Page, DayOfWeek, Attribute, Dungeon } from './types';
+import type { Player, Quest, Difficulty, ActiveDungeonState, DungeonCooldown, DungeonHistoryEntry, Achievement, ShopItem, Inventory, EquipmentSlot, SystemNotification, Page, DayOfWeek, Attribute, Dungeon, DungeonKeys } from './types';
 import { Difficulty as DifficultyEnum } from './types';
-import { DUNGEONS, SHOP_ITEMS, getLevelRequirement } from './constants';
+import { DUNGEONS, SHOP_ITEMS, getLevelRequirement, DUNGEON_LEVEL_REQUIREMENTS, DUNGEON_KEYS_PER_DAY } from './constants';
 import { Codex } from './components/Codex';
 import { SkillsPage } from './components/SkillsPage';
 import StartupPage from './components/StartupPage';
@@ -378,7 +378,9 @@ const DungeonsPage: React.FC<{
     onFailDungeon: () => void;
     onProgressDungeon: () => void;
     dungeonHistory: DungeonHistoryEntry[];
-}> = ({ onStartDungeon, activeDungeon, dungeonCooldowns, onClearDungeon, onFailDungeon, onProgressDungeon, dungeonHistory }) => {
+    playerLevel: number;
+    dungeonKeys: DungeonKeys;
+}> = ({ onStartDungeon, activeDungeon, dungeonCooldowns, onClearDungeon, onFailDungeon, onProgressDungeon, dungeonHistory, playerLevel, dungeonKeys }) => {
     const [selectedRank, setSelectedRank] = useState<Difficulty | null>(null);
     const [view, setView] = useState<'gates' | 'cooldowns'>('gates');
 
@@ -477,16 +479,35 @@ const DungeonsPage: React.FC<{
         return (
             <div className="space-y-6">
                 {renderSubNav()}
-                <h2 className="font-orbitron text-2xl text-blue-400 uppercase tracking-widest font-black mb-8 border-b border-blue-500/20 pb-4">GATE CLASSIFICATIONS</h2>
+                <div className="flex items-center justify-between mb-8 border-b border-blue-500/20 pb-4">
+                    <h2 className="font-orbitron text-2xl text-blue-400 uppercase tracking-widest font-black">GATE CLASSIFICATIONS</h2>
+                    <div className="flex items-center gap-2 bg-black/40 border border-yellow-500/30 px-4 py-2 rounded">
+                        <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 24 24"><path d="M3 10h18v2H3zm0 4h18v2H3zm3-8l3 2-3 2-3-2 3-2zm12 0l3 2-3 2-3-2 3-2z"/></svg>
+                        <span className="font-orbitron text-xs font-black text-yellow-400">{dungeonKeys.count}/{DUNGEON_KEYS_PER_DAY}</span>
+                        <span className="font-orbitron text-[9px] font-black text-gray-500 uppercase tracking-widest">Keys</span>
+                    </div>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {ranks.map(rank => {
                         const styles = getGradeStyles(rank);
                         const count = DUNGEONS.filter(d => d.grade === rank).length;
+                        const levelReq = DUNGEON_LEVEL_REQUIREMENTS[rank] || 1;
+                        const isLevelLocked = playerLevel < levelReq;
                         return (
-                            <button key={rank} onClick={() => setSelectedRank(rank)} className={`glass-panel p-8 rounded border transition-all duration-300 hover:scale-105 group text-center flex flex-col items-center ${styles.border} ${styles.glow}`}>
-                                <span className={`font-orbitron text-5xl font-black mb-3 ${styles.text}`}>[{rank}]</span>
+                            <button key={rank} onClick={() => !isLevelLocked && setSelectedRank(rank)} disabled={isLevelLocked} className={`glass-panel p-8 rounded border transition-all duration-300 group text-center flex flex-col items-center relative ${isLevelLocked ? 'opacity-50 cursor-not-allowed border-gray-700' : `hover:scale-105 ${styles.border} ${styles.glow}`}`}>
+                                {isLevelLocked && (
+                                    <div className="absolute top-2 right-2 bg-gray-800/90 border border-gray-600 px-2 py-1 rounded flex items-center gap-1">
+                                        <svg className="w-3 h-3 text-gray-400" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1C8.676 1 6 3.676 6 7v1H4v15h16V8h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 110 4 2 2 0 010-4z"/></svg>
+                                        <span className="font-orbitron text-[8px] font-black text-gray-400">LVL {levelReq}</span>
+                                    </div>
+                                )}
+                                <span className={`font-orbitron text-5xl font-black mb-3 ${isLevelLocked ? 'text-gray-600' : styles.text}`}>[{rank}]</span>
                                 <span className="font-orbitron text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-4">Rank Gates</span>
-                                <span className="bg-white/5 px-4 py-1 rounded-full text-[9px] font-bold text-gray-500 uppercase tracking-widest">{count} Available</span>
+                                {isLevelLocked ? (
+                                    <span className="bg-red-900/30 border border-red-500/30 px-4 py-1 rounded-full text-[9px] font-bold text-red-400 uppercase tracking-widest">Locked — Lvl {levelReq}</span>
+                                ) : (
+                                    <span className="bg-white/5 px-4 py-1 rounded-full text-[9px] font-bold text-gray-500 uppercase tracking-widest">{count} Available</span>
+                                )}
                             </button>
                         );
                     })}
@@ -497,6 +518,8 @@ const DungeonsPage: React.FC<{
 
     const filteredDungeons = DUNGEONS.filter(d => d.grade === selectedRank);
     const styles = getGradeStyles(selectedRank);
+    const gradeIsLevelLocked = playerLevel < (DUNGEON_LEVEL_REQUIREMENTS[selectedRank] || 1);
+    const noKeysLeft = dungeonKeys.count <= 0;
 
     return (
         <div className="space-y-6">
@@ -507,15 +530,25 @@ const DungeonsPage: React.FC<{
                     </button>
                     <h2 className="font-orbitron text-2xl text-blue-400 uppercase tracking-widest font-black">[{selectedRank}] RANK GATES</h2>
                 </div>
+                <div className={`flex items-center gap-2 border px-3 py-1.5 rounded ${noKeysLeft ? 'border-red-500/40 bg-red-950/20' : 'border-yellow-500/30 bg-black/40'}`}>
+                    <svg className={`w-4 h-4 ${noKeysLeft ? 'text-red-400' : 'text-yellow-400'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+                    <span className={`font-orbitron text-xs font-black ${noKeysLeft ? 'text-red-400' : 'text-yellow-400'}`}>{dungeonKeys.count}/{DUNGEON_KEYS_PER_DAY}</span>
+                    <span className="font-orbitron text-[9px] font-black text-gray-500 uppercase tracking-widest">Keys</span>
+                </div>
             </div>
+            {noKeysLeft && (
+                <div className="bg-red-950/20 border border-red-500/30 rounded p-4 text-center">
+                    <p className="font-orbitron text-xs font-black text-red-400 uppercase tracking-widest">Dungeon Keys Depleted</p>
+                    <p className="text-gray-500 text-[10px] uppercase tracking-wider mt-1">Keys reset at midnight. Come back tomorrow.</p>
+                </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {filteredDungeons.map(d => {
                     const cooldown = dungeonCooldowns[d.id];
-                    const isLocked = cooldown && cooldown.readyAt > Date.now();
-                    const rewardXp = d.rewards?.xp || 0;
-                    const estimatedCoins = d.grade === DifficultyEnum.S || d.grade === DifficultyEnum.S_PLUS ? '200-750' : d.grade === DifficultyEnum.A ? '50-100' : d.grade === DifficultyEnum.B ? '15-40' : '3-25';
+                    const isOnCooldown = cooldown && cooldown.readyAt > Date.now();
+                    const isBlocked = isOnCooldown || gradeIsLevelLocked || noKeysLeft;
                     return (
-                        <div key={d.id} className={`glass-panel p-6 rounded border transition-all duration-500 hover:-translate-y-1 ${styles.border} ${styles.glow} group`}>
+                        <div key={d.id} className={`glass-panel p-6 rounded border transition-all duration-500 ${isBlocked ? 'opacity-60' : 'hover:-translate-y-1'} ${styles.border} ${styles.glow} group`}>
                             <div className="flex justify-between items-start mb-4">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
@@ -527,8 +560,15 @@ const DungeonsPage: React.FC<{
                             </div>
                             <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
                                 <div className="text-[9px] text-gray-500 uppercase font-black">{d.floors.length} FLOORS</div>
-                                {isLocked ? (
+                                {isOnCooldown ? (
                                     <span className="text-[9px] text-red-400 font-black uppercase tracking-widest">ON COOLDOWN</span>
+                                ) : gradeIsLevelLocked ? (
+                                    <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-1">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1C8.676 1 6 3.676 6 7v1H4v15h16V8h-2V7c0-3.324-2.676-6-6-6zm0 2c2.276 0 4 1.724 4 4v1H8V7c0-2.276 1.724-4 4-4zm0 9a2 2 0 110 4 2 2 0 010-4z"/></svg>
+                                        Lvl {DUNGEON_LEVEL_REQUIREMENTS[d.grade]} Required
+                                    </span>
+                                ) : noKeysLeft ? (
+                                    <span className="text-[9px] text-red-400 font-black uppercase tracking-widest">No Keys Left</span>
                                 ) : (
                                     <button onClick={() => onStartDungeon(d)} className={`px-4 py-2 rounded text-[9px] font-black uppercase tracking-widest border transition-all ${styles.border} ${styles.text} hover:bg-white/5`}>Enter Gate</button>
                                 )}
@@ -844,7 +884,7 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
             case 'achievements': return <AchievementsPage achievements={data.achievements} />;
             case 'quests': return <QuestLogPage quests={data.quests} onComplete={handleCompleteQuest} onDelete={id => setConfirm({ title: 'Erase Entry', message: 'Permanently purge this quest record?', isDangerous: true, onConfirm: () => data.deleteQuest(id) })} onFail={id => data.failQuest(id)} onAddQuest={data.addQuest} onWatchAdForQuest={handleWatchAdForQuest} />;
             case 'skills': return <SkillsPage skills={data.skills} skillFolders={data.skillFolders} categories={data.categories} improveSkill={data.improveSkill} addSkill={data.addSkill} addSkillFolder={data.addSkillFolder} addCategory={data.addCategory} onDeleteSkill={data.deleteSkill} onDeleteSkillFolder={data.deleteSkillFolder} onDeleteCategory={data.deleteCategory} />;
-            case 'dungeons': return <DungeonsPage onStartDungeon={d => setConfirm({ title: 'Enter Gate', message: `Proceed into [${d.grade}] Gate: ${d.name}? Danger level is high.`, onConfirm: () => data.startDungeon(d.id) })} activeDungeon={data.activeDungeon} dungeonCooldowns={data.dungeonCooldowns} onClearDungeon={handleClearDungeon} onFailDungeon={data.failActiveDungeon} onProgressDungeon={data.progressDungeon} dungeonHistory={data.dungeonHistory} />;
+            case 'dungeons': return <DungeonsPage onStartDungeon={d => setConfirm({ title: 'Enter Gate', message: `Proceed into [${d.grade}] Gate: ${d.name}? Danger level is high.`, onConfirm: () => data.startDungeon(d.id) })} activeDungeon={data.activeDungeon} dungeonCooldowns={data.dungeonCooldowns} onClearDungeon={handleClearDungeon} onFailDungeon={data.failActiveDungeon} onProgressDungeon={data.progressDungeon} dungeonHistory={data.dungeonHistory} playerLevel={data.player.level} dungeonKeys={data.dungeonKeys} />;
             case 'history': return <QuestHistory completedQuests={data.completedQuests} dungeonHistory={data.dungeonHistory} onUpgradePro={() => handleShowUpgrade('Detailed History Log')} />;
             case 'task-list': return <TaskList weeklyPlan={data.weeklyPlan} onAddTask={data.addTaskListTask} onToggleTask={data.toggleTaskListTask} onDeleteTask={data.deleteTaskListTask} />;
             case 'workshop': return <WorkshopPage inventory={data.inventory} onEnhance={data.enhanceGear} onAdvance={data.advanceGear} player={data.player} />;

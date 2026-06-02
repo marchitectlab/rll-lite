@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Player, Quest, Difficulty, PlayerDataState, CompletedQuest, Skill, Attribute, SkillPrerequisite, SkillFolder, SkillCategory, ActiveDungeonState, DungeonCooldown, DungeonHistoryEntry, Inventory, Achievement, ShopItem, EquipmentSlot, PlayerDataEvent, WeeklyPlan, DayOfWeek, PlannerItem, MaterialItem, SystemNotification } from '../types';
 import { Rank, Difficulty as DifficultyEnum } from '../types';
-import { XP_PER_DIFFICULTY, getXpToNextLevel, getRankForLevel, TRAINING_PER_HALF_STAR, SKILL_UNLOCK_REQUIREMENTS, XP_FOR_SKILL_UNLOCK, STAT_POINTS_PER_DIFFICULTY, DUNGEONS, SYSTEM_QUESTS, XP_FOR_SKILL_ASCENSION, QUEST_COIN_REWARDS, ACHIEVEMENTS_DATA, MATERIALS, ADVANCEMENT_TRAITS, X_RANK_PENALTY_OVERRIDE, DAILY_XP_GOAL, ENHANCEMENT_REQUIREMENT, getLevelRequirement } from '../constants';
+import { XP_PER_DIFFICULTY, getXpToNextLevel, getRankForLevel, TRAINING_PER_HALF_STAR, SKILL_UNLOCK_REQUIREMENTS, XP_FOR_SKILL_UNLOCK, STAT_POINTS_PER_DIFFICULTY, DUNGEONS, SYSTEM_QUESTS, XP_FOR_SKILL_ASCENSION, QUEST_COIN_REWARDS, ACHIEVEMENTS_DATA, MATERIALS, ADVANCEMENT_TRAITS, X_RANK_PENALTY_OVERRIDE, DAILY_XP_GOAL, ENHANCEMENT_REQUIREMENT, getLevelRequirement, DUNGEON_LEVEL_REQUIREMENTS, DUNGEON_KEYS_PER_DAY } from '../constants';
 
 const DATA_VERSION = 11;
 const Berserker_GEAR_IDS = ['armor_berserker'];
@@ -61,6 +61,8 @@ const getScalingXpBonus = (itemId: string, sourceRank: Difficulty): number => {
     return 0;
 };
 
+const getTodayDateStr = () => new Date().toISOString().split('T')[0];
+
 const DEFAULT_STATE: PlayerDataState = {
     dataVersion: DATA_VERSION,
     player: { name: 'Hunter', level: 1, xp: 0, rank: Rank.E, attributes: { [Attribute.Intellect]: 1, [Attribute.Strength]: 1, [Attribute.Agility]: 1, [Attribute.Endurance]: 1, [Attribute.Perception]: 1 }, shopCoins: 0, unlockedTitles: [], equippedTitle: null },
@@ -68,7 +70,8 @@ const DEFAULT_STATE: PlayerDataState = {
     inventory: { equipment: { helmet: null, armor: null, gloves: null, boots: null, gear: null }, storage: [], materials: [] },
     weeklyPlan: { monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] },
     events: [],
-    notifications: []
+    notifications: [],
+    dungeonKeys: { count: DUNGEON_KEYS_PER_DAY, lastResetDate: getTodayDateStr() },
 };
 
 const getInitialState = (): PlayerDataState => {
@@ -95,6 +98,13 @@ const getInitialState = (): PlayerDataState => {
                 });
             }
 
+            // Migrate / reset dungeon keys
+            const today = getTodayDateStr();
+            const savedKeys = parsed.dungeonKeys;
+            const dungeonKeys = (!savedKeys || savedKeys.lastResetDate !== today)
+                ? { count: DUNGEON_KEYS_PER_DAY, lastResetDate: today }
+                : savedKeys;
+
             return { 
                 ...DEFAULT_STATE, 
                 ...parsed, 
@@ -102,6 +112,7 @@ const getInitialState = (): PlayerDataState => {
                 quests: Array.isArray(parsed.quests) ? parsed.quests : DEFAULT_STATE.quests,
                 inventory: sanitizedInventory, 
                 dungeonCooldowns,
+                dungeonKeys,
                 achievements: { ...ACHIEVEMENTS_DATA, ...(parsed.achievements || {}) }, 
                 dataVersion: DATA_VERSION, 
                 notifications: [] 
@@ -454,12 +465,51 @@ export const usePlayerData = () => {
     }, [state.quests, addNotification, gainXp, checkAchievements]);
 
 
+    // Midnight key reset effect
+    useEffect(() => {
+        const scheduleReset = () => {
+            const now = new Date();
+            const nextMidnight = new Date(now);
+            nextMidnight.setDate(now.getDate() + 1);
+            nextMidnight.setHours(0, 0, 0, 0);
+            const msUntilMidnight = nextMidnight.getTime() - now.getTime();
+            return setTimeout(() => {
+                const today = getTodayDateStr();
+                setState(s => ({ ...s, dungeonKeys: { count: DUNGEON_KEYS_PER_DAY, lastResetDate: today } }));
+                addNotification('KEYS RESTORED', `Dungeon Keys have been replenished (${DUNGEON_KEYS_PER_DAY}/${DUNGEON_KEYS_PER_DAY}).`, 'info');
+            }, msUntilMidnight);
+        };
+        const timer = scheduleReset();
+        return () => clearTimeout(timer);
+    }, [addNotification]);
+
     const startDungeon = useCallback((id: string) => {
         const dungeon = DUNGEONS.find(d => d.id === id);
-        if (dungeon) {
-            setState(s => ({ ...s, activeDungeon: { id: `d-${Date.now()}`, dungeonId: id, startedAt: Date.now(), currentFloorIndex: 0, currentTaskIndex: 0, taskStatus: {} } }));
-            addNotification('GATE ENTERED', `Incursion initiated: ${dungeon.name}.`, 'info');
-        }
+        if (!dungeon) return;
+
+        setState(s => {
+            // Check level requirement
+            const levelReq = DUNGEON_LEVEL_REQUIREMENTS[dungeon.grade] || 1;
+            if (s.player.level < levelReq) {
+                setTimeout(() => addNotification('ACCESS DENIED', `Reach Level ${levelReq} to enter [${dungeon.grade}] Gates.`, 'danger'), 0);
+                return s;
+            }
+            // Check dungeon key availability
+            const today = getTodayDateStr();
+            const keys = s.dungeonKeys.lastResetDate !== today
+                ? { count: DUNGEON_KEYS_PER_DAY, lastResetDate: today }
+                : s.dungeonKeys;
+            if (keys.count <= 0) {
+                setTimeout(() => addNotification('NO KEYS', 'Dungeon Keys are depleted. Keys reset at midnight.', 'danger'), 0);
+                return s;
+            }
+            setTimeout(() => addNotification('GATE ENTERED', `Incursion initiated: ${dungeon.name}. Keys remaining: ${keys.count - 1}/${DUNGEON_KEYS_PER_DAY}.`, 'info'), 0);
+            return { 
+                ...s, 
+                dungeonKeys: { ...keys, count: keys.count - 1 },
+                activeDungeon: { id: `d-${Date.now()}`, dungeonId: id, startedAt: Date.now(), currentFloorIndex: 0, currentTaskIndex: 0, taskStatus: {} } 
+            };
+        });
     }, [addNotification]);
 
     const progressDungeon = useCallback(() => {
