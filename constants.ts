@@ -116,6 +116,8 @@ export const DUNGEON_LEVEL_REQUIREMENTS: Record<Difficulty, number> = {
 };
 
 export const DUNGEON_KEYS_PER_DAY = 2;
+export const DUNGEON_KEYS_PRO_PER_DAY = 4;
+export const AD_BONUS_KEYS_PER_DAY = 2;
 
 export const QUEST_COIN_REWARDS: Record<Difficulty, number> = {
   [Difficulty.E]: 1, [Difficulty.D]: 2, [Difficulty.C]: 3, [Difficulty.B]: 5,
@@ -699,7 +701,6 @@ export const SHOP_ITEMS: ShopItem[] = [
     { id: 'gear_dragon_slayer', name: 'Dragon Slayer', type: 'Gear', slot: 'gear', rank: Difficulty.S_PLUS, bonusXp: 50, effectDescription: "Forged with the malice of slain spirits.", cost: 3000 },
     
     // Items
-    { id: 'potion_healing', name: 'Healing Potion', type: 'Potion', rank: Difficulty.S, effectDescription: "Restores 100 XP.", cost: 500 },
     { id: 'brilliant_light_orb', name: 'Brilliant Light Orb', type: 'Potion', rank: Difficulty.S, effectDescription: "Used to Uplift Berserker Gear curse.", cost: 2000 },
 ];
 

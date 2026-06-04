@@ -1,8 +1,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Player, Quest, Difficulty, PlayerDataState, CompletedQuest, Skill, Attribute, SkillPrerequisite, SkillFolder, SkillCategory, ActiveDungeonState, DungeonCooldown, DungeonHistoryEntry, Inventory, Achievement, ShopItem, EquipmentSlot, PlayerDataEvent, WeeklyPlan, DayOfWeek, PlannerItem, MaterialItem, SystemNotification } from '../types';
+import { Player, Quest, Difficulty, PlayerDataState, CompletedQuest, Skill, Attribute, SkillPrerequisite, SkillFolder, SkillCategory, ActiveDungeonState, DungeonCooldown, DungeonHistoryEntry, Inventory, Achievement, ShopItem, EquipmentSlot, PlayerDataEvent, WeeklyPlan, DayOfWeek, PlannerItem, MaterialItem, SystemNotification, DungeonKeys } from '../types';
 import { Rank, Difficulty as DifficultyEnum } from '../types';
-import { XP_PER_DIFFICULTY, getXpToNextLevel, getRankForLevel, TRAINING_PER_HALF_STAR, SKILL_UNLOCK_REQUIREMENTS, XP_FOR_SKILL_UNLOCK, STAT_POINTS_PER_DIFFICULTY, DUNGEONS, SYSTEM_QUESTS, XP_FOR_SKILL_ASCENSION, QUEST_COIN_REWARDS, ACHIEVEMENTS_DATA, MATERIALS, ADVANCEMENT_TRAITS, X_RANK_PENALTY_OVERRIDE, DAILY_XP_GOAL, ENHANCEMENT_REQUIREMENT, getLevelRequirement, DUNGEON_LEVEL_REQUIREMENTS, DUNGEON_KEYS_PER_DAY } from '../constants';
+import { XP_PER_DIFFICULTY, getXpToNextLevel, getRankForLevel, TRAINING_PER_HALF_STAR, SKILL_UNLOCK_REQUIREMENTS, XP_FOR_SKILL_UNLOCK, STAT_POINTS_PER_DIFFICULTY, DUNGEONS, SYSTEM_QUESTS, XP_FOR_SKILL_ASCENSION, QUEST_COIN_REWARDS, ACHIEVEMENTS_DATA, MATERIALS, ADVANCEMENT_TRAITS, X_RANK_PENALTY_OVERRIDE, DAILY_XP_GOAL, ENHANCEMENT_REQUIREMENT, getLevelRequirement, DUNGEON_LEVEL_REQUIREMENTS, DUNGEON_KEYS_PER_DAY, DUNGEON_KEYS_PRO_PER_DAY, AD_BONUS_KEYS_PER_DAY } from '../constants';
 
 const DATA_VERSION = 11;
 const Berserker_GEAR_IDS = ['armor_berserker'];
@@ -61,7 +61,12 @@ const getScalingXpBonus = (itemId: string, sourceRank: Difficulty): number => {
     return 0;
 };
 
-const getTodayDateStr = () => new Date().toISOString().split('T')[0];
+const getNextMidnight = (): number => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+};
 
 const DEFAULT_STATE: PlayerDataState = {
     dataVersion: DATA_VERSION,
@@ -71,7 +76,7 @@ const DEFAULT_STATE: PlayerDataState = {
     weeklyPlan: { monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [] },
     events: [],
     notifications: [],
-    dungeonKeys: { count: DUNGEON_KEYS_PER_DAY, lastResetDate: getTodayDateStr() },
+    dungeonKeys: { count: DUNGEON_KEYS_PER_DAY, resetAt: getNextMidnight(), adBonusCount: 0, adBonusResetAt: getNextMidnight(), maxPerDay: DUNGEON_KEYS_PER_DAY },
 };
 
 const getInitialState = (): PlayerDataState => {
@@ -98,12 +103,21 @@ const getInitialState = (): PlayerDataState => {
                 });
             }
 
-            // Migrate / reset dungeon keys
-            const today = getTodayDateStr();
+            // Migrate / reset dungeon keys (timestamp-based)
+            const now = Date.now();
             const savedKeys = parsed.dungeonKeys;
-            const dungeonKeys = (!savedKeys || savedKeys.lastResetDate !== today)
-                ? { count: DUNGEON_KEYS_PER_DAY, lastResetDate: today }
-                : savedKeys;
+            const keysExpired = !savedKeys || !savedKeys.resetAt || now >= savedKeys.resetAt;
+            const maxPerDay = savedKeys?.maxPerDay ?? DUNGEON_KEYS_PER_DAY;
+            const adExpired = !savedKeys?.adBonusResetAt || now >= savedKeys.adBonusResetAt;
+            const dungeonKeys: DungeonKeys = keysExpired
+                ? { count: maxPerDay, resetAt: getNextMidnight(), adBonusCount: 0, adBonusResetAt: getNextMidnight(), maxPerDay }
+                : {
+                    count: savedKeys.count,
+                    resetAt: savedKeys.resetAt,
+                    adBonusCount: adExpired ? 0 : (savedKeys.adBonusCount ?? 0),
+                    adBonusResetAt: adExpired ? getNextMidnight() : savedKeys.adBonusResetAt,
+                    maxPerDay,
+                  };
 
             return { 
                 ...DEFAULT_STATE, 
@@ -468,15 +482,14 @@ export const usePlayerData = () => {
     // Midnight key reset effect
     useEffect(() => {
         const scheduleReset = () => {
-            const now = new Date();
-            const nextMidnight = new Date(now);
-            nextMidnight.setDate(now.getDate() + 1);
-            nextMidnight.setHours(0, 0, 0, 0);
-            const msUntilMidnight = nextMidnight.getTime() - now.getTime();
+            const nextMidnight = getNextMidnight();
+            const msUntilMidnight = nextMidnight - Date.now();
             return setTimeout(() => {
-                const today = getTodayDateStr();
-                setState(s => ({ ...s, dungeonKeys: { count: DUNGEON_KEYS_PER_DAY, lastResetDate: today } }));
-                addNotification('KEYS RESTORED', `Dungeon Keys have been replenished (${DUNGEON_KEYS_PER_DAY}/${DUNGEON_KEYS_PER_DAY}).`, 'info');
+                setState(s => {
+                    const max = s.dungeonKeys.maxPerDay;
+                    return { ...s, dungeonKeys: { count: max, resetAt: getNextMidnight(), adBonusCount: 0, adBonusResetAt: getNextMidnight(), maxPerDay: max } };
+                });
+                addNotification('KEYS RESTORED', 'Dungeon Keys have been replenished.', 'info');
             }, msUntilMidnight);
         };
         const timer = scheduleReset();
@@ -494,16 +507,17 @@ export const usePlayerData = () => {
                 setTimeout(() => addNotification('ACCESS DENIED', `Reach Level ${levelReq} to enter [${dungeon.grade}] Gates.`, 'danger'), 0);
                 return s;
             }
-            // Check dungeon key availability
-            const today = getTodayDateStr();
-            const keys = s.dungeonKeys.lastResetDate !== today
-                ? { count: DUNGEON_KEYS_PER_DAY, lastResetDate: today }
+            // Check dungeon key availability (timestamp-based reset)
+            const now = Date.now();
+            const keysExpired = now >= s.dungeonKeys.resetAt;
+            const keys: DungeonKeys = keysExpired
+                ? { ...s.dungeonKeys, count: s.dungeonKeys.maxPerDay, resetAt: getNextMidnight(), adBonusCount: 0, adBonusResetAt: getNextMidnight() }
                 : s.dungeonKeys;
             if (keys.count <= 0) {
                 setTimeout(() => addNotification('NO KEYS', 'Dungeon Keys are depleted. Keys reset at midnight.', 'danger'), 0);
                 return s;
             }
-            setTimeout(() => addNotification('GATE ENTERED', `Incursion initiated: ${dungeon.name}. Keys remaining: ${keys.count - 1}/${DUNGEON_KEYS_PER_DAY}.`, 'info'), 0);
+            setTimeout(() => addNotification('GATE ENTERED', `Incursion initiated: ${dungeon.name}. Keys remaining: ${keys.count - 1}/${keys.maxPerDay}.`, 'info'), 0);
             return { 
                 ...s, 
                 dungeonKeys: { ...keys, count: keys.count - 1 },
@@ -511,6 +525,30 @@ export const usePlayerData = () => {
             };
         });
     }, [addNotification]);
+
+    const earnDungeonKey = useCallback(() => {
+        setState(s => {
+            const now = Date.now();
+            const adExpired = now >= s.dungeonKeys.adBonusResetAt;
+            const adBonusCount = adExpired ? 0 : s.dungeonKeys.adBonusCount;
+            const adBonusResetAt = adExpired ? getNextMidnight() : s.dungeonKeys.adBonusResetAt;
+            if (adBonusCount >= AD_BONUS_KEYS_PER_DAY) {
+                setTimeout(() => addNotification('LIMIT REACHED', `Max ${AD_BONUS_KEYS_PER_DAY} bonus keys per day via ads.`, 'warning'), 0);
+                return s;
+            }
+            setTimeout(() => addNotification('KEY EARNED', `Bonus key added! (${adBonusCount + 1}/${AD_BONUS_KEYS_PER_DAY} ad keys today)`, 'success'), 0);
+            return { ...s, dungeonKeys: { ...s.dungeonKeys, count: s.dungeonKeys.count + 1, adBonusCount: adBonusCount + 1, adBonusResetAt } };
+        });
+    }, [addNotification]);
+
+    const setProDungeonKeys = useCallback((isPro: boolean) => {
+        setState(s => {
+            const newMax = isPro ? DUNGEON_KEYS_PRO_PER_DAY : DUNGEON_KEYS_PER_DAY;
+            if (s.dungeonKeys.maxPerDay === newMax) return s;
+            const newCount = isPro ? Math.max(s.dungeonKeys.count, DUNGEON_KEYS_PRO_PER_DAY - s.dungeonKeys.adBonusCount) : s.dungeonKeys.count;
+            return { ...s, dungeonKeys: { ...s.dungeonKeys, maxPerDay: newMax, count: newCount } };
+        });
+    }, []);
 
     const progressDungeon = useCallback(() => {
         setState(prevState => {
@@ -1043,7 +1081,7 @@ export const usePlayerData = () => {
 
     return { 
         ...state, 
-        gainXp, clearActiveDungeon, enhanceGear, advanceGear, toggleTaskListTask, addTaskListTask, deleteTaskListTask, addQuest, deleteQuest, failQuest, completeQuest, startDungeon, progressDungeon, failActiveDungeon, buyItem, 
+        gainXp, clearActiveDungeon, enhanceGear, advanceGear, toggleTaskListTask, addTaskListTask, deleteTaskListTask, addQuest, deleteQuest, failQuest, completeQuest, startDungeon, progressDungeon, failActiveDungeon, buyItem, earnDungeonKey, setProDungeonKeys, 
         renamePlayer: (newName: string) => { if (newName.trim()) { setState(s => ({ ...s, player: { ...s.player, name: newName.trim() } })); addNotification('IDENTITY UPDATED', `Recognized as [${newName}].`, 'info'); } }, 
         equipItem: (item: ShopItem) => {
             setState(s => {

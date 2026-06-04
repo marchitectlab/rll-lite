@@ -249,7 +249,10 @@ export type PlayerDataEvent =
 
 export interface DungeonKeys {
   count: number;
-  lastResetDate: string; // YYYY-MM-DD
+  resetAt: number;        // Unix ms timestamp of next midnight key reset
+  adBonusCount: number;   // bonus keys earned via watch-ad today
+  adBonusResetAt: number; // Unix ms timestamp of next ad bonus reset (midnight)
+  maxPerDay: number;      // 2 for free users, 4 for pro users
 }
 
 export interface PlayerDataState {

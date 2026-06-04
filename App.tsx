@@ -9,7 +9,7 @@ import { QuestHistory } from './components/QuestHistory';
 import { ProPurchaseModal } from './components/ProPurchaseModal';
 import type { Player, Quest, Difficulty, ActiveDungeonState, DungeonCooldown, DungeonHistoryEntry, Achievement, ShopItem, Inventory, EquipmentSlot, SystemNotification, Page, DayOfWeek, Attribute, Dungeon, DungeonKeys } from './types';
 import { Difficulty as DifficultyEnum } from './types';
-import { DUNGEONS, SHOP_ITEMS, getLevelRequirement, DUNGEON_LEVEL_REQUIREMENTS, DUNGEON_KEYS_PER_DAY } from './constants';
+import { DUNGEONS, SHOP_ITEMS, getLevelRequirement, DUNGEON_LEVEL_REQUIREMENTS, DUNGEON_KEYS_PER_DAY, DUNGEON_KEYS_PRO_PER_DAY, AD_BONUS_KEYS_PER_DAY } from './constants';
 import { Codex } from './components/Codex';
 import { SkillsPage } from './components/SkillsPage';
 import StartupPage from './components/StartupPage';
@@ -380,7 +380,9 @@ const DungeonsPage: React.FC<{
     dungeonHistory: DungeonHistoryEntry[];
     playerLevel: number;
     dungeonKeys: DungeonKeys;
-}> = ({ onStartDungeon, activeDungeon, dungeonCooldowns, onClearDungeon, onFailDungeon, onProgressDungeon, dungeonHistory, playerLevel, dungeonKeys }) => {
+    isPro: boolean;
+    onEarnKey: () => void;
+}> = ({ onStartDungeon, activeDungeon, dungeonCooldowns, onClearDungeon, onFailDungeon, onProgressDungeon, dungeonHistory, playerLevel, dungeonKeys, isPro, onEarnKey }) => {
     const [selectedRank, setSelectedRank] = useState<Difficulty | null>(null);
     const [view, setView] = useState<'gates' | 'cooldowns' | 'history'>('gates');
 
@@ -439,10 +441,23 @@ const DungeonsPage: React.FC<{
         </div>
     );
 
+    const maxKeys = dungeonKeys.maxPerDay ?? DUNGEON_KEYS_PER_DAY;
+    const adBonusUsed = dungeonKeys.adBonusCount ?? 0;
+    const adBonusLeft = AD_BONUS_KEYS_PER_DAY - adBonusUsed;
     const KeysBadge = ({ small }: { small?: boolean }) => (
-        <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-sm w-fit ${dungeonKeys.count <= 0 ? 'border-red-500/40 bg-red-950/20' : 'border-yellow-500/30 bg-black/40'}`}>
-            <svg className={`${small ? 'w-3 h-3' : 'w-4 h-4'} ${dungeonKeys.count <= 0 ? 'text-red-400' : 'text-yellow-400'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
-            <span className={`font-orbitron ${small ? 'text-[10px]' : 'text-xs'} font-black ${dungeonKeys.count <= 0 ? 'text-red-400' : 'text-yellow-400'}`}>{dungeonKeys.count}/{DUNGEON_KEYS_PER_DAY} Keys</span>
+        <div className="flex flex-wrap items-center gap-2">
+            <div className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-sm ${dungeonKeys.count <= 0 ? 'border-red-500/40 bg-red-950/20' : 'border-yellow-500/30 bg-black/40'}`}>
+                <svg className={`${small ? 'w-3 h-3' : 'w-4 h-4'} ${dungeonKeys.count <= 0 ? 'text-red-400' : 'text-yellow-400'}`} fill="currentColor" viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>
+                <span className={`font-orbitron ${small ? 'text-[10px]' : 'text-xs'} font-black ${dungeonKeys.count <= 0 ? 'text-red-400' : 'text-yellow-400'}`}>
+                    {dungeonKeys.count}/{maxKeys} Keys{isPro ? ' ★' : ''}
+                </span>
+            </div>
+            {adBonusLeft > 0 && (
+                <button onClick={onEarnKey} className="flex items-center gap-1.5 border border-blue-500/40 bg-blue-950/20 px-3 py-1.5 rounded-sm hover:bg-blue-900/40 active:scale-95 transition-all">
+                    <svg className="w-3 h-3 text-blue-400 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <span className="font-orbitron text-[10px] font-black text-blue-400">Watch Ad +1 Key ({adBonusUsed}/{AD_BONUS_KEYS_PER_DAY})</span>
+                </button>
+            )}
         </div>
     );
 
@@ -800,6 +815,11 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
 
     const openPurchaseModal = useCallback(() => setShowPurchaseModal(true), []);
 
+    // Sync pro dungeon key allowance whenever isPro changes
+    useEffect(() => {
+        data.setProDungeonKeys(isPro);
+    }, [isPro]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // Initialize AdMob on mount (skip if Pro)
     useEffect(() => {
         if (isPro) return;
@@ -923,7 +943,7 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
             case 'achievements': return <AchievementsPage achievements={data.achievements} />;
             case 'quests': return <QuestLogPage quests={data.quests} onComplete={handleCompleteQuest} onDelete={id => setConfirm({ title: 'Erase Entry', message: 'Permanently purge this quest record?', isDangerous: true, onConfirm: () => data.deleteQuest(id) })} onFail={id => data.failQuest(id)} onAddQuest={data.addQuest} onWatchAdForQuest={handleWatchAdForQuest} />;
             case 'skills': return <SkillsPage skills={data.skills} skillFolders={data.skillFolders} categories={data.categories} improveSkill={data.improveSkill} addSkill={data.addSkill} addSkillFolder={data.addSkillFolder} addCategory={data.addCategory} onDeleteSkill={data.deleteSkill} onDeleteSkillFolder={data.deleteSkillFolder} onDeleteCategory={data.deleteCategory} />;
-            case 'dungeons': return <DungeonsPage onStartDungeon={d => setConfirm({ title: 'Enter Gate', message: `Proceed into [${d.grade}] Gate: ${d.name}? Danger level is high.`, onConfirm: () => data.startDungeon(d.id) })} activeDungeon={data.activeDungeon} dungeonCooldowns={data.dungeonCooldowns} onClearDungeon={handleClearDungeon} onFailDungeon={data.failActiveDungeon} onProgressDungeon={data.progressDungeon} dungeonHistory={data.dungeonHistory} playerLevel={data.player.level} dungeonKeys={data.dungeonKeys} />;
+            case 'dungeons': return <DungeonsPage onStartDungeon={d => setConfirm({ title: 'Enter Gate', message: `Proceed into [${d.grade}] Gate: ${d.name}? Danger level is high.`, onConfirm: () => data.startDungeon(d.id) })} activeDungeon={data.activeDungeon} dungeonCooldowns={data.dungeonCooldowns} onClearDungeon={handleClearDungeon} onFailDungeon={data.failActiveDungeon} onProgressDungeon={data.progressDungeon} dungeonHistory={data.dungeonHistory} playerLevel={data.player.level} dungeonKeys={data.dungeonKeys} isPro={isPro} onEarnKey={() => showRewardedAd(data.earnDungeonKey)} />;
             case 'history': return <QuestHistory completedQuests={data.completedQuests} dungeonHistory={data.dungeonHistory} onUpgradePro={() => handleShowUpgrade('Detailed History Log')} />;
             case 'task-list': return <TaskList weeklyPlan={data.weeklyPlan} onAddTask={data.addTaskListTask} onToggleTask={data.toggleTaskListTask} onDeleteTask={data.deleteTaskListTask} />;
             case 'workshop': return <WorkshopPage inventory={data.inventory} onEnhance={data.enhanceGear} onAdvance={data.advanceGear} player={data.player} />;
