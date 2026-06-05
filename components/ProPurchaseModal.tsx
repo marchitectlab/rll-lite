@@ -4,18 +4,22 @@ import { ProPlan } from '../hooks/usePro';
 interface ProPurchaseModalProps {
   onClose: () => void;
   onPurchase: (plan: 'monthly' | 'lifetime') => Promise<{ success: boolean; error?: string }>;
+  onRestore: () => Promise<{ success: boolean; wasPro: boolean; error?: string }>;
+  onRetry: () => void;
   purchasing: boolean;
   offeringsLoading: boolean;
+  offeringsError: boolean;
   monthlyPlan: ProPlan;
   lifetimePlan: ProPlan;
 }
 
 export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
-  onClose, onPurchase, purchasing,
-  offeringsLoading, monthlyPlan, lifetimePlan,
+  onClose, onPurchase, onRestore, onRetry, purchasing,
+  offeringsLoading, offeringsError, monthlyPlan, lifetimePlan,
 }) => {
   const [selected, setSelected] = useState<'monthly' | 'lifetime'>('lifetime');
-  const [notice, setNotice] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; msg: string } | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   const handlePurchase = async () => {
     setNotice(null);
@@ -28,10 +32,28 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
     }
   };
 
+  const handleRestore = async () => {
+    setRestoring(true);
+    setNotice(null);
+    const result = await onRestore();
+    if (result.wasPro) {
+      setNotice({ type: 'success', msg: 'Purchase restored! Pro is now active.' });
+      setTimeout(onClose, 1800);
+    } else if (result.success) {
+      setNotice({ type: 'info', msg: 'No previous Pro purchase found on this account.' });
+    } else {
+      setNotice({ type: 'error', msg: result.error ?? 'Restore failed. Try again.' });
+    }
+    setRestoring(false);
+  };
+
   const plans: { key: 'monthly' | 'lifetime'; plan: ProPlan; badge?: string }[] = [
     { key: 'monthly', plan: monthlyPlan },
     { key: 'lifetime', plan: lifetimePlan, badge: 'BEST VALUE' },
   ];
+
+  const storeUnavailable = !offeringsLoading && offeringsError;
+  const canPurchase = !offeringsLoading && !offeringsError && (monthlyPlan.pkg !== null || lifetimePlan.pkg !== null);
 
   return (
     <div
@@ -83,6 +105,21 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
                   <div key={i} className="flex-1 h-16 bg-slate-800/60 rounded-lg animate-pulse border border-slate-700" />
                 ))}
               </div>
+            ) : storeUnavailable ? (
+              <div className="mb-4 px-3 py-3 rounded-lg border border-yellow-700/40 bg-yellow-950/30 text-center">
+                <p className="font-orbitron text-[9px] text-yellow-500 uppercase tracking-widest mb-2">
+                  ⚠ Store unavailable
+                </p>
+                <p className="font-orbitron text-[8px] text-gray-400 mb-3">
+                  Could not connect to Google Play. Check your connection and try again.
+                </p>
+                <button
+                  onClick={() => { setNotice(null); onRetry(); }}
+                  className="font-orbitron text-[9px] font-black uppercase tracking-widest text-yellow-400 border border-yellow-600/40 px-4 py-1.5 rounded hover:bg-yellow-900/30 transition-colors"
+                >
+                  ↻ Retry
+                </button>
+              </div>
             ) : (
               <div className="flex gap-2 mb-4">
                 {plans.map(({ key, plan, badge }) => {
@@ -127,6 +164,8 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
               <div className={`mb-3 px-3 py-2 rounded text-[9px] font-orbitron uppercase tracking-wide font-black ${
                 notice.type === 'success'
                   ? 'bg-green-900/50 text-green-400 border border-green-500/40'
+                  : notice.type === 'info'
+                  ? 'bg-blue-900/50 text-blue-400 border border-blue-500/40'
                   : 'bg-red-900/50 text-red-400 border border-red-500/40'
               }`}>
                 {notice.msg}
@@ -136,12 +175,21 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
             {/* Purchase button */}
             <button
               onClick={handlePurchase}
-              disabled={purchasing || offeringsLoading}
+              disabled={purchasing || offeringsLoading || !canPurchase}
               className="w-full bg-gradient-to-r from-yellow-500 to-amber-400 text-black font-orbitron text-[11px] font-black uppercase tracking-widest py-3 rounded shadow-[0_0_20px_rgba(234,179,8,0.5)] hover:shadow-[0_0_30px_rgba(234,179,8,0.7)] transition-all hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed disabled:scale-100 mb-2"
             >
               {purchasing
                 ? '⟳ Processing...'
                 : `⚡ Get ${selected === 'monthly' ? monthlyPlan.price + '/mo' : lifetimePlan.price + ' Lifetime'}`}
+            </button>
+
+            {/* Restore Purchases */}
+            <button
+              onClick={handleRestore}
+              disabled={restoring || purchasing}
+              className="w-full bg-slate-800/60 border border-slate-700 text-gray-400 hover:text-yellow-400 font-orbitron text-[9px] font-black uppercase tracking-widest py-2 rounded transition-colors mb-2 disabled:opacity-50"
+            >
+              {restoring ? '⟳ Restoring...' : '↩ Restore Previous Purchase'}
             </button>
 
             <button
