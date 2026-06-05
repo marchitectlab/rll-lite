@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useAuth } from './hooks/useAuth';
 import { initializeRevenueCat } from './lib/revenuecat';
+import { requestNotificationPermission } from './lib/notifications';
 import App from './App';
 
 const LoadingScreen: React.FC = () => (
@@ -37,6 +38,13 @@ const AppRoot: React.FC = () => {
     if (loading) return;
     initializeRevenueCat(user?.id ?? undefined);
   }, [loading, user?.id]);
+
+  // Request device notification permission once auth is settled.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    if (loading) return;
+    requestNotificationPermission();
+  }, [loading]);
 
   if (loading) return <LoadingScreen />;
 

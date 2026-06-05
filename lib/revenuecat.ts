@@ -45,6 +45,27 @@ export async function getOfferings() {
   }
 }
 
+export type PaywallResult = 'PURCHASED' | 'RESTORED' | 'NOT_PRESENTED' | 'ERROR' | 'CANCELLED';
+
+/**
+ * Present the RevenueCat-hosted paywall configured in the RC dashboard.
+ * Returns the result so the caller can refresh customer info on success.
+ */
+export async function presentRCPaywall(): Promise<PaywallResult> {
+  if (!Capacitor.isNativePlatform()) return 'NOT_PRESENTED';
+  try {
+    const result = await (Purchases as any).presentPaywall({
+      requiredEntitlementIdentifier: ENTITLEMENT_ID,
+    });
+    const r: PaywallResult = result?.paywallResult ?? 'NOT_PRESENTED';
+    console.log('[RC] presentPaywall result:', r);
+    return r;
+  } catch (e) {
+    console.warn('[RC] presentPaywall not available or errored, falling back:', e);
+    return 'NOT_PRESENTED';
+  }
+}
+
 export async function purchasePackage(pkg: PurchasesPackage): Promise<{ success: boolean; error?: string }> {
   if (!Capacitor.isNativePlatform()) {
     return { success: true };

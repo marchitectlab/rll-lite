@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { PlayerStats } from './components/PlayerStats';
 import { QuestList } from './components/QuestList';
 import { CreateQuestForm } from './components/CreateQuestForm';
@@ -18,6 +19,8 @@ import { ReportExport } from './components/ReportExport';
 import { TaskList } from './components/TaskList';
 import { WorkshopPage } from './components/WorkshopPage';
 import { supabase } from './lib/supabase';
+import { presentRCPaywall } from './lib/revenuecat';
+import { schedulePlannerReminder, scheduleQuestReminder } from './lib/notifications';
 
 // ---- AdMob IDs ----
 const BANNER_AD_ID = 'ca-app-pub-2481483129842770/1727552190';
@@ -36,6 +39,19 @@ const getAdMob = async () => {
   try {
     const mod = await import('@capacitor-community/admob');
     AdMobLib = mod;
+    return mod;
+  } catch {
+    return null;
+  }
+};
+
+// Lazy-load @capacitor/app for back button + app state events
+let CapAppLib: any = null;
+const getCapApp = async () => {
+  if (CapAppLib) return CapAppLib;
+  try {
+    const mod = await import('@capacitor/app');
+    CapAppLib = mod;
     return mod;
   } catch {
     return null;
@@ -798,7 +814,7 @@ interface AppProps {
 
 const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onResetPassword, authError, onClearAuthError, authLoading }) => {
     const data = usePlayerData();
-    const { isPro, purchasing, offeringsLoading, offeringsError, monthlyPlan, lifetimePlan, purchasePlan, restoreProPurchases, retryOfferings } = usePro();
+    const { isPro, purchasing, offeringsLoading, offeringsError, monthlyPlan, lifetimePlan, purchasePlan, restoreProPurchases, retryOfferings, refreshProStatus } = usePro();
     const [page, setPage] = useState<Page | 'startup'>('startup');
     const handleSignOut = useCallback(async () => {
         await onSignOut();
@@ -809,11 +825,28 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
     const [showRate, setShowRate] = useState(false);
     const [showUpgradePro, setShowUpgradePro] = useState(false);
     const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+    const [showExitConfirm, setShowExitConfirm] = useState(false);
     const [upgradeFeatureName, setUpgradeFeatureName] = useState('');
     const promoCountRef = React.useRef(0);
     const prevLevelRef = React.useRef<number | null>(null);
+    const pageRef = React.useRef<Page | 'startup'>('startup');
 
-    const openPurchaseModal = useCallback(() => setShowPurchaseModal(true), []);
+    // Keep a ref in sync so the back-button handler always reads current page
+    useEffect(() => { pageRef.current = page; }, [page]);
+
+    // Try RC dashboard paywall first; fall back to custom modal if not configured
+    const openPurchaseModal = useCallback(async () => {
+        if (Capacitor.isNativePlatform()) {
+            const result = await presentRCPaywall();
+            if (result === 'PURCHASED' || result === 'RESTORED') {
+                refreshProStatus();
+                return;
+            }
+            if (result === 'CANCELLED') return;
+            // 'NOT_PRESENTED' or 'ERROR' → show custom modal
+        }
+        setShowPurchaseModal(true);
+    }, [refreshProStatus]);
 
     // Sync pro dungeon key allowance whenever isPro changes
     useEffect(() => {
@@ -825,6 +858,43 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
         if (isPro) return;
         initAdMob().then(() => { prepareInterstitialAd(); prepareRewardedAd(); });
     }, [isPro]);
+
+    // Android hardware back button: page → menu → startup → exit confirm
+    useEffect(() => {
+        if (!Capacitor.isNativePlatform()) return;
+        let listener: any = null;
+        getCapApp().then(lib => {
+            if (!lib) return;
+            lib.App.addListener('backButton', async ({ canGoBack }: { canGoBack: boolean }) => {
+                const current = pageRef.current;
+                if (current !== 'startup' && current !== 'menu') {
+                    setPage('menu');
+                } else if (current === 'menu') {
+                    setPage('startup');
+                } else {
+                    // On startup page — ask to exit
+                    setShowExitConfirm(true);
+                }
+            }).then((l: any) => { listener = l; });
+        });
+        return () => { listener?.remove?.(); };
+    }, []);
+
+    // Schedule device notifications when app goes to background
+    useEffect(() => {
+        if (!Capacitor.isNativePlatform()) return;
+        let listener: any = null;
+        getCapApp().then(lib => {
+            if (!lib) return;
+            lib.App.addListener('appStateChange', ({ isActive }: { isActive: boolean }) => {
+                if (!isActive) {
+                    scheduleQuestReminder(data.quests);
+                    schedulePlannerReminder(data.weeklyPlan);
+                }
+            }).then((l: any) => { listener = l; });
+        });
+        return () => { listener?.remove?.(); };
+    }, [data.quests, data.weeklyPlan]);
 
     // Detect level-up and show rate prompt every RATE_EVERY_N_LEVELS levels
     useEffect(() => {
@@ -930,8 +1000,8 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
                 <div className="animate-fadeIn pb-24 lg:pb-0 space-y-4">
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                         {fullNav.filter(n => n.id !== 'menu').map(n => (
-                            <button key={n.id} onClick={() => navigateTo(n.id as Page)} className="bg-[#020617] p-4 md:p-8 rounded-lg flex flex-col items-center justify-center hover:bg-blue-500/10 transition-all border-blue-500/20 group hover:border-blue-400/50 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)]">
-                                <div className="text-blue-400 mb-2 md:mb-4 group-hover:scale-110 transition-transform drop-shadow-[0_0_10px_rgba(56,189,248,0.5)] scale-90 md:scale-100">{n.icon}</div>
+                            <button key={n.id} onClick={() => navigateTo(n.id as Page)} className="bg-[#020617] p-4 md:p-6 rounded-lg flex flex-col items-center justify-center hover:bg-blue-500/10 transition-all border border-blue-500/20 group hover:border-blue-400/50 shadow-[0_8px_32px_0_rgba(0,0,0,0.4)]">
+                                <div className="text-blue-400 mb-2 md:mb-3 group-hover:scale-110 transition-transform drop-shadow-[0_0_10px_rgba(56,189,248,0.5)] p-2.5 border border-blue-500/30 rounded-lg bg-blue-500/5 group-hover:border-blue-400/60 group-hover:bg-blue-500/10">{n.icon}</div>
                                 <span className="font-orbitron text-[9px] md:text-[11px] font-black tracking-[0.2em] md:tracking-[0.3em] text-white uppercase text-center leading-tight">{n.label}</span>
                             </button>
                         ))}
@@ -956,7 +1026,46 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
     };
 
     if (page === 'startup') {
-        return <StartupPage onEnter={() => navigateTo('menu')} onLoginPress={!userEmail ? () => setShowAuthModal(true) : undefined} userEmail={userEmail} />;
+        return (
+            <>
+                <StartupPage onEnter={() => navigateTo('menu')} onLoginPress={!userEmail ? () => setShowAuthModal(true) : undefined} userEmail={userEmail} />
+                {showExitConfirm && (
+                    <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[500] backdrop-blur-md">
+                        <div className="glass-panel border-2 border-blue-500 rounded-lg p-6 w-full max-w-sm m-4 shadow-[0_0_30px_rgba(56,189,248,0.3)]">
+                            <h3 className="font-orbitron text-lg font-black mb-2 uppercase text-blue-300">Exit System?</h3>
+                            <p className="text-gray-400 text-xs mb-8 uppercase tracking-tighter font-bold">Close the R.L.L application?</p>
+                            <div className="flex gap-3 justify-end">
+                                <button onClick={() => setShowExitConfirm(false)} className="bg-gray-800 px-4 py-2 rounded text-[10px] uppercase font-black tracking-widest text-gray-400 hover:text-white transition-colors">Stay</button>
+                                <button
+                                    onClick={async () => {
+                                        setShowExitConfirm(false);
+                                        const lib = await getCapApp();
+                                        lib?.App?.exitApp?.();
+                                    }}
+                                    className="bg-blue-700 px-4 py-2 rounded text-[10px] uppercase font-black tracking-widest hover:scale-105 transition-transform"
+                                >
+                                    Exit
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {showAuthModal && (
+                    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[500] flex items-end justify-center" onClick={() => setShowAuthModal(false)}>
+                        <div className="w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                            <AuthPage
+                                onSignIn={async (email, password) => { const ok = await onSignIn(email, password); if (ok) setShowAuthModal(false); return ok; }}
+                                onSignUp={onSignUp}
+                                onForgotPassword={onResetPassword}
+                                loading={authLoading}
+                                error={authError}
+                                onClearError={onClearAuthError}
+                            />
+                        </div>
+                    </div>
+                )}
+            </>
+        );
     }
 
     return (

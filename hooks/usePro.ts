@@ -19,6 +19,24 @@ export type ProPlan = {
   pkg: PurchasesPackage | null;
 };
 
+/** Match a package as the monthly plan — no dangerous fallbacks. */
+function findMonthly(pkgs: PurchasesPackage[]): PurchasesPackage | null {
+  return (
+    pkgs.find(p => p.packageType === 'MONTHLY') ??
+    pkgs.find(p => p.identifier.toLowerCase().includes('month')) ??
+    null
+  );
+}
+
+/** Match a package as the lifetime plan — no dangerous fallbacks. */
+function findLifetime(pkgs: PurchasesPackage[]): PurchasesPackage | null {
+  return (
+    pkgs.find(p => p.packageType === 'LIFETIME') ??
+    pkgs.find(p => p.identifier.toLowerCase().includes('lifetime')) ??
+    null
+  );
+}
+
 export const usePro = () => {
   const [isPro, setIsPro] = useState<boolean>(loadLocalPro);
   const [purchasing, setPurchasing] = useState(false);
@@ -37,10 +55,6 @@ export const usePro = () => {
     setOfferingsLoading(true);
     setOfferingsError(false);
     try {
-      // ── RC entitlement check on every call ──
-      // AppRoot.tsx already called initializeRevenueCat() — do NOT call it
-      // again here. Calling Purchases.configure() twice on v9 throws and
-      // the subsequent getOfferings() call would silently fail.
       const entitledOnServer = await checkIsPro();
       if (entitledOnServer) {
         setIsPro(true);
@@ -50,48 +64,71 @@ export const usePro = () => {
         saveLocalPro(false);
       }
 
-      // ── Load live prices from RC offerings ──
       const offerings = await getOfferings();
+
       if (offerings?.current) {
         const pkgs = offerings.current.availablePackages;
 
-        const monthly = pkgs.find(p =>
-          p.packageType === 'MONTHLY' ||
-          p.identifier.toLowerCase().includes('month')
-        ) ?? pkgs[0] ?? null;
+        console.log('[usePro] packages from RC:', pkgs.map(p => ({
+          id: p.identifier,
+          type: p.packageType,
+          price: p.product.priceString,
+        })));
 
-        const lifetime = pkgs.find(p =>
-          p.packageType === 'LIFETIME' ||
-          p.identifier.toLowerCase().includes('lifetime')
-        ) ?? pkgs.find(p =>
-          p.packageType === 'ANNUAL' ||
-          p.identifier.toLowerCase().includes('annual')
-        ) ?? (pkgs.length > 1 ? pkgs[1] : null);
+        const monthly = findMonthly(pkgs);
+        const lifetime = findLifetime(pkgs);
 
-        if (monthly) setMonthlyPlan({
-          label: 'Monthly', price: monthly.product.priceString, period: '/month', pkg: monthly,
-        });
-        if (lifetime) setLifetimePlan({
-          label: 'Lifetime', price: lifetime.product.priceString, period: 'one-time', pkg: lifetime,
-        });
+        console.log('[usePro] matched monthly:', monthly?.identifier ?? 'none');
+        console.log('[usePro] matched lifetime:', lifetime?.identifier ?? 'none');
 
-        // If we got offerings but still no packages, flag as error
-        if (!monthly && !lifetime) setOfferingsError(true);
+        if (monthly) {
+          setMonthlyPlan({
+            label: 'Monthly',
+            price: monthly.product.priceString,
+            period: '/month',
+            pkg: monthly,
+          });
+        }
+
+        if (lifetime) {
+          setLifetimePlan({
+            label: 'Lifetime',
+            price: lifetime.product.priceString,
+            period: 'one-time',
+            pkg: lifetime,
+          });
+        }
+
+        if (!monthly && !lifetime) {
+          console.warn('[usePro] No monthly or lifetime package found in current offering.');
+          setOfferingsError(true);
+        }
       } else {
-        // No current offering configured in RevenueCat dashboard
+        console.warn('[usePro] No current offering configured in RevenueCat dashboard.');
         setOfferingsError(true);
       }
-    } catch {
+    } catch (e) {
+      console.error('[usePro] loadOfferings error:', e);
       setOfferingsError(true);
     }
     setOfferingsLoading(false);
   }, []);
 
   useEffect(() => {
-    // Small delay so AppRoot.tsx's initializeRevenueCat() finishes first
     const t = setTimeout(loadOfferings, 300);
     return () => clearTimeout(t);
   }, [loadOfferings]);
+
+  /** Call after a successful RC paywall purchase to re-sync pro status. */
+  const refreshProStatus = useCallback(async () => {
+    try {
+      const isNowPro = await checkIsPro();
+      setIsPro(isNowPro);
+      saveLocalPro(isNowPro);
+    } catch (e) {
+      console.error('[usePro] refreshProStatus error:', e);
+    }
+  }, []);
 
   const purchasePlan = useCallback(async (plan: 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
     setPurchasing(true);
@@ -103,9 +140,10 @@ export const usePro = () => {
       }
 
       if (!planData.pkg) {
-        return { success: false, error: 'Store not available. Check your connection and tap Retry.' };
+        return { success: false, error: `The ${plan} plan is not available. Check your RevenueCat offering setup.` };
       }
 
+      console.log(`[usePro] purchasing ${plan} plan:`, planData.pkg.identifier);
       const result = await purchasePackage(planData.pkg);
       if (result.success) {
         setIsPro(true);
@@ -141,5 +179,6 @@ export const usePro = () => {
     purchasePlan,
     restoreProPurchases,
     retryOfferings: loadOfferings,
+    refreshProStatus,
   };
 };

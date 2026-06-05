@@ -1,10 +1,61 @@
 workflows:
-  android-build:
-    name: Android Debug APK + Release AAB
+  android-release:
+    name: Android Release APK + AAB (Signed)
     max_build_duration: 60
     environment:
       node: 20.19.0
       java: 17
+      vars:
+        PACKAGE_NAME: "com.rll.mobile"
+      groups:
+        - keystore_credentials  # CM_KEYSTORE_PATH, CM_KEY_ALIAS, CM_KEY_PASSWORD, CM_STORE_PASSWORD
+
+    scripts:
+      - name: Install dependencies
+        script: npm install
+
+      - name: Build web app
+        script: npm run build
+
+      - name: Sync Capacitor
+        script: npx cap sync android
+
+      - name: Grant Gradle execute permission
+        script: chmod +x android/gradlew
+
+      - name: Write keystore.properties
+        script: |
+          cat > android/keystore.properties <<PROPS
+          storeFile=$CM_KEYSTORE_PATH
+          storePassword=$CM_STORE_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          keyPassword=$CM_KEY_PASSWORD
+          PROPS
+
+      - name: Build Release APK
+        script: cd android && ./gradlew assembleRelease
+
+      - name: Build Release AAB
+        script: cd android && ./gradlew bundleRelease
+
+    artifacts:
+      - android/app/build/outputs/apk/release/app-release.apk
+      - android/app/build/outputs/bundle/release/app-release.aab
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+
+  android-debug:
+    name: Android Debug APK
+    max_build_duration: 60
+    environment:
+      node: 20.19.0
+      java: 17
+
     scripts:
       - name: Install dependencies
         script: npm install
@@ -21,16 +72,5 @@ workflows:
       - name: Build Debug APK
         script: cd android && ./gradlew assembleDebug
 
-      - name: Build Release AAB
-        script: cd android && ./gradlew bundleRelease
-
     artifacts:
       - android/app/build/outputs/apk/debug/app-debug.apk
-      - android/app/build/outputs/bundle/release/app-release.aab
-
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: main
-          include: true

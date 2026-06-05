@@ -17,7 +17,10 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
   onClose, onPurchase, onRestore, onRetry, purchasing,
   offeringsLoading, offeringsError, monthlyPlan, lifetimePlan,
 }) => {
-  const [selected, setSelected] = useState<'monthly' | 'lifetime'>('lifetime');
+  // Default to lifetime; fall back to monthly if lifetime didn't load
+  const defaultPlan: 'monthly' | 'lifetime' =
+    lifetimePlan.pkg !== null ? 'lifetime' : 'monthly';
+  const [selected, setSelected] = useState<'monthly' | 'lifetime'>(defaultPlan);
   const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; msg: string } | null>(null);
   const [restoring, setRestoring] = useState(false);
 
@@ -53,7 +56,10 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
   ];
 
   const storeUnavailable = !offeringsLoading && offeringsError;
-  const canPurchase = !offeringsLoading && !offeringsError && (monthlyPlan.pkg !== null || lifetimePlan.pkg !== null);
+  // A plan is purchasable only if its package actually loaded from RC
+  const selectedPlanLoaded =
+    selected === 'monthly' ? monthlyPlan.pkg !== null : lifetimePlan.pkg !== null;
+  const canPurchase = !offeringsLoading && !offeringsError && selectedPlanLoaded;
 
   return (
     <div
@@ -124,31 +130,35 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
               <div className="flex gap-2 mb-4">
                 {plans.map(({ key, plan, badge }) => {
                   const isSelected = selected === key;
+                  const isAvailable = plan.pkg !== null;
                   return (
                     <button
                       key={key}
-                      onClick={() => setSelected(key)}
+                      onClick={() => isAvailable && setSelected(key)}
+                      disabled={!isAvailable}
                       className={`flex-1 relative rounded-lg border-2 py-3 px-3 text-left transition-all ${
-                        isSelected
+                        !isAvailable
+                          ? 'border-slate-700 bg-slate-900/40 opacity-40 cursor-not-allowed'
+                          : isSelected
                           ? 'border-yellow-400 bg-yellow-950/40 shadow-[0_0_16px_rgba(234,179,8,0.3)]'
                           : 'border-slate-600 bg-slate-800/40 hover:border-slate-500'
                       }`}
                     >
-                      {badge && (
+                      {badge && isAvailable && (
                         <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-yellow-400 text-black font-orbitron text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full whitespace-nowrap">
                           {badge}
                         </span>
                       )}
-                      <div className={`font-orbitron text-[9px] font-black uppercase tracking-widest mb-1 ${isSelected ? 'text-yellow-300' : 'text-gray-400'}`}>
+                      <div className={`font-orbitron text-[9px] font-black uppercase tracking-widest mb-1 ${isSelected && isAvailable ? 'text-yellow-300' : 'text-gray-400'}`}>
                         {plan.label}
                       </div>
-                      <div className={`font-orbitron text-xl font-black leading-none ${isSelected ? 'text-white' : 'text-gray-300'}`}>
-                        {plan.price}
+                      <div className={`font-orbitron text-xl font-black leading-none ${isSelected && isAvailable ? 'text-white' : 'text-gray-300'}`}>
+                        {isAvailable ? plan.price : '—'}
                       </div>
                       <div className="font-orbitron text-[8px] text-gray-500 uppercase tracking-wide mt-0.5">
-                        {plan.period}
+                        {isAvailable ? plan.period : 'unavailable'}
                       </div>
-                      {isSelected && (
+                      {isSelected && isAvailable && (
                         <div className="absolute top-2 right-2 w-3.5 h-3.5 rounded-full bg-yellow-400 flex items-center justify-center">
                           <span className="text-black text-[8px] font-black">✓</span>
                         </div>
@@ -180,7 +190,9 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
             >
               {purchasing
                 ? '⟳ Processing...'
-                : `⚡ Get ${selected === 'monthly' ? monthlyPlan.price + '/mo' : lifetimePlan.price + ' Lifetime'}`}
+                : canPurchase
+                  ? `⚡ Get ${selected === 'monthly' ? monthlyPlan.price + '/mo' : lifetimePlan.price + ' Lifetime'}`
+                  : '⚠ Plan Unavailable'}
             </button>
 
             {/* Restore Purchases */}
