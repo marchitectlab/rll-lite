@@ -84,15 +84,23 @@ export const usePro = () => {
     setPurchasing(true);
     try {
       const planData = plan === 'monthly' ? monthlyPlan : lifetimePlan;
-      if (Capacitor.isNativePlatform() && planData.pkg) {
-        const result = await purchasePackage(planData.pkg);
-        if (result.success) { setIsPro(true); saveLocalPro(true); }
-        return result;
+
+      if (!Capacitor.isNativePlatform()) {
+        // Purchases are only available on the native Android app.
+        return { success: false, error: 'Purchases are only available in the Android app.' };
       }
-      // Web/dev: activate directly for testing
-      setIsPro(true);
-      saveLocalPro(true);
-      return { success: true };
+
+      if (!planData.pkg) {
+        // Offerings haven't loaded yet — never grant Pro without a real transaction.
+        return { success: false, error: 'Prices are still loading. Please wait a moment and try again.' };
+      }
+
+      const result = await purchasePackage(planData.pkg);
+      if (result.success) {
+        setIsPro(true);
+        saveLocalPro(true);
+      }
+      return result;
     } catch (e: any) {
       return { success: false, error: e?.message ?? 'Purchase failed' };
     } finally {
