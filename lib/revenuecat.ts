@@ -1,29 +1,71 @@
-import { Purchases, LOG_LEVEL, PurchasesPackage, CustomerInfo } from '@revenuecat/purchases-capacitor';
+import { Purchases, LOG_LEVEL, PurchasesPackage, CustomerInfo, Offerings } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 
 export const REVENUECAT_API_KEY = 'goog_KgAFOsBJYohudnACLWCIbgABOSu';
 export const ENTITLEMENT_ID = 'pro';
 
+// ---------------------------------------------------------------------------
+// RC readiness gate — waitForRC() resolves once configure() finishes
+// ---------------------------------------------------------------------------
+let _rcResolve: (() => void) | null = null;
+let _rcReject: ((e: unknown) => void) | null = null;
+let _rcReady = false;
+let _rcError: unknown = null;
+
+const _rcPromise: Promise<void> = new Promise((res, rej) => {
+  _rcResolve = res;
+  _rcReject = rej;
+});
+
+/** Waits until initializeRevenueCat() has completed (or thrown). */
+export function waitForRC(): Promise<void> {
+  if (_rcReady) return Promise.resolve();
+  if (_rcError) return Promise.reject(_rcError);
+  return _rcPromise;
+}
+
+// ---------------------------------------------------------------------------
+// Initialization
+// ---------------------------------------------------------------------------
 export async function initializeRevenueCat(userId?: string): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return;
+  if (!Capacitor.isNativePlatform()) {
+    console.log('[RC] Not a native platform — skipping initialization.');
+    _rcReady = true;
+    _rcResolve?.();
+    return;
+  }
+
   try {
+    console.log('[RC] initializeRevenueCat — start. userId:', userId ?? '(anonymous)');
     await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
     await Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    console.log('[RC] Purchases.configure() — SUCCESS');
+
     if (userId) {
       await Purchases.logIn({ appUserID: userId });
+      console.log('[RC] Purchases.logIn() — SUCCESS, appUserID:', userId);
     }
-  } catch (e) {
-    console.error('RevenueCat init error:', e);
+
+    _rcReady = true;
+    _rcResolve?.();
+    console.log('[RC] initializeRevenueCat — COMPLETE');
+  } catch (e: any) {
+    console.error('[RC] initializeRevenueCat — FAILED:', e?.message ?? e);
+    _rcError = e;
+    _rcReject?.(e);
   }
 }
 
+// ---------------------------------------------------------------------------
+// Customer info / entitlement
+// ---------------------------------------------------------------------------
 export async function getCustomerInfo(): Promise<CustomerInfo | null> {
   if (!Capacitor.isNativePlatform()) return null;
   try {
     const { customerInfo } = await Purchases.getCustomerInfo();
     return customerInfo;
-  } catch (e) {
-    console.error('getCustomerInfo error:', e);
+  } catch (e: any) {
+    console.error('[RC] getCustomerInfo error:', e?.message ?? e);
     return null;
   }
 }
@@ -34,23 +76,52 @@ export async function checkIsPro(): Promise<boolean> {
   return info.entitlements.active[ENTITLEMENT_ID] !== undefined;
 }
 
-export async function getOfferings() {
-  if (!Capacitor.isNativePlatform()) return null;
+// ---------------------------------------------------------------------------
+// Offerings — always returns { offerings, error }, never null
+// ---------------------------------------------------------------------------
+export async function getOfferings(): Promise<{ offerings: Offerings | null; error: string | null }> {
+  if (!Capacitor.isNativePlatform()) {
+    return { offerings: null, error: 'Not a native platform.' };
+  }
+
   try {
-    const { offerings } = await Purchases.getOfferings();
-    return offerings;
-  } catch (e) {
-    console.error('getOfferings error:', e);
-    return null;
+    console.log('[RC] Purchases.getOfferings() — calling…');
+    const result = await Purchases.getOfferings();
+    const offerings = result.offerings;
+
+    console.log('[RC] Purchases.getOfferings() — raw result keys:', Object.keys(result));
+    console.log('[RC] offerings.current:', offerings?.current?.identifier ?? 'null');
+
+    const pkgs = offerings?.current?.availablePackages ?? [];
+    console.log(
+      '[RC] availablePackages (' + pkgs.length + '):',
+      pkgs.map(p => ({
+        id: p.identifier,
+        type: p.packageType,
+        productId: p.product?.identifier,
+        price: p.product?.priceString,
+      }))
+    );
+
+    if (!offerings?.current) {
+      const msg = `Purchases.getOfferings() succeeded but offerings.current is null. All offerings keys: [${Object.keys(offerings ?? {}).join(', ')}]`;
+      console.warn('[RC]', msg);
+      return { offerings: null, error: msg };
+    }
+
+    return { offerings, error: null };
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    console.error('[RC] Purchases.getOfferings() — THREW:', msg, e);
+    return { offerings: null, error: msg };
   }
 }
 
+// ---------------------------------------------------------------------------
+// Paywall (RC-hosted, optional)
+// ---------------------------------------------------------------------------
 export type PaywallResult = 'PURCHASED' | 'RESTORED' | 'NOT_PRESENTED' | 'ERROR' | 'CANCELLED';
 
-/**
- * Present the RevenueCat-hosted paywall configured in the RC dashboard.
- * Returns the result so the caller can refresh customer info on success.
- */
 export async function presentRCPaywall(): Promise<PaywallResult> {
   if (!Capacitor.isNativePlatform()) return 'NOT_PRESENTED';
   try {
@@ -66,6 +137,9 @@ export async function presentRCPaywall(): Promise<PaywallResult> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Purchase & restore
+// ---------------------------------------------------------------------------
 export async function purchasePackage(pkg: PurchasesPackage): Promise<{ success: boolean; error?: string }> {
   if (!Capacitor.isNativePlatform()) {
     return { success: true };
@@ -90,8 +164,8 @@ export async function restorePurchases(): Promise<{ success: boolean; wasPro: bo
     const { customerInfo } = await Purchases.restorePurchases();
     const wasPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
     return { success: true, wasPro };
-  } catch (e) {
-    console.error('restorePurchases error:', e);
+  } catch (e: any) {
+    console.error('[RC] restorePurchases error:', e?.message ?? e);
     return { success: false, wasPro: false };
   }
 }
