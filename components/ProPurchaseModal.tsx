@@ -9,15 +9,15 @@ interface ProPurchaseModalProps {
   purchasing: boolean;
   offeringsLoading: boolean;
   offeringsError: boolean;
+  offeringsErrorMsg?: string;
   monthlyPlan: ProPlan;
   lifetimePlan: ProPlan;
 }
 
 export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
   onClose, onPurchase, onRestore, onRetry, purchasing,
-  offeringsLoading, offeringsError, monthlyPlan, lifetimePlan,
+  offeringsLoading, offeringsError, offeringsErrorMsg, monthlyPlan, lifetimePlan,
 }) => {
-  // Default to lifetime; fall back to monthly if lifetime didn't load
   const defaultPlan: 'monthly' | 'lifetime' =
     lifetimePlan.pkg !== null ? 'lifetime' : 'monthly';
   const [selected, setSelected] = useState<'monthly' | 'lifetime'>(defaultPlan);
@@ -50,16 +50,20 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
     setRestoring(false);
   };
 
+  // Plans as currently known — show placeholder prices while loading
   const plans: { key: 'monthly' | 'lifetime'; plan: ProPlan; badge?: string }[] = [
     { key: 'monthly', plan: monthlyPlan },
     { key: 'lifetime', plan: lifetimePlan, badge: 'BEST VALUE' },
   ];
 
-  const storeUnavailable = !offeringsLoading && offeringsError;
-  // A plan is purchasable only if its package actually loaded from RC
-  const selectedPlanLoaded =
-    selected === 'monthly' ? monthlyPlan.pkg !== null : lifetimePlan.pkg !== null;
+  // A plan is purchasable only when its package has loaded from RC
+  const selectedPlanLoaded = selected === 'monthly' ? monthlyPlan.pkg !== null : lifetimePlan.pkg !== null;
   const canPurchase = !offeringsLoading && !offeringsError && selectedPlanLoaded;
+
+  // Determine what to show in the plan-selector area
+  const showError = !offeringsLoading && offeringsError;
+  const showPlans = !offeringsLoading && !offeringsError;
+  const showLoadingPlans = offeringsLoading; // show placeholder plans while loading
 
   return (
     <div
@@ -105,67 +109,71 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
             {/* Plan selector */}
             <p className="font-orbitron text-[9px] text-yellow-600 uppercase tracking-widest mb-2">Choose your plan:</p>
 
-            {offeringsLoading ? (
-              <div className="flex gap-2 mb-4">
-                {[0, 1].map(i => (
-                  <div key={i} className="flex-1 h-16 bg-slate-800/60 rounded-lg animate-pulse border border-slate-700" />
-                ))}
-              </div>
-            ) : storeUnavailable ? (
-              <div className="mb-4 px-3 py-3 rounded-lg border border-yellow-700/40 bg-yellow-950/30 text-center">
-                <p className="font-orbitron text-[9px] text-yellow-500 uppercase tracking-widest mb-2">
-                  ⚠ Store unavailable
-                </p>
-                <p className="font-orbitron text-[8px] text-gray-400 mb-3">
-                  Could not connect to Google Play. Check your connection and try again.
-                </p>
+            {/* Always show plan cards — loading state dims them and shows spinner */}
+            <div className="flex gap-2 mb-3 relative">
+              {plans.map(({ key, plan, badge }) => {
+                const isSelected = selected === key;
+                const isLoaded = plan.pkg !== null;
+                const isDisabled = (!isLoaded && !offeringsLoading) || purchasing;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => !isDisabled && setSelected(key)}
+                    disabled={isDisabled}
+                    className={`flex-1 relative rounded-lg border-2 py-3 px-3 text-left transition-all ${
+                      showError
+                        ? 'border-slate-700 bg-slate-900/40 opacity-50 cursor-not-allowed'
+                        : isSelected && isLoaded
+                        ? 'border-yellow-400 bg-yellow-950/40 shadow-[0_0_16px_rgba(234,179,8,0.3)]'
+                        : 'border-slate-600 bg-slate-800/40 hover:border-slate-500'
+                    }`}
+                  >
+                    {badge && (
+                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-yellow-400 text-black font-orbitron text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full whitespace-nowrap">
+                        {badge}
+                      </span>
+                    )}
+                    <div className={`font-orbitron text-[9px] font-black uppercase tracking-widest mb-1 ${isSelected && isLoaded ? 'text-yellow-300' : 'text-gray-400'}`}>
+                      {plan.label}
+                    </div>
+                    <div className={`font-orbitron text-xl font-black leading-none ${isSelected && isLoaded ? 'text-white' : 'text-gray-300'}`}>
+                      {showLoadingPlans
+                        ? <span className="inline-block w-12 h-5 bg-slate-700 rounded animate-pulse" />
+                        : plan.price}
+                    </div>
+                    <div className="font-orbitron text-[8px] text-gray-500 uppercase tracking-wide mt-0.5">
+                      {showLoadingPlans ? <span className="inline-block w-10 h-3 bg-slate-700/60 rounded animate-pulse mt-1" /> : plan.period}
+                    </div>
+                    {isSelected && isLoaded && !showLoadingPlans && (
+                      <div className="absolute top-2 right-2 w-3.5 h-3.5 rounded-full bg-yellow-400 flex items-center justify-center">
+                        <span className="text-black text-[8px] font-black">✓</span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Loading overlay */}
+              {showLoadingPlans && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="font-orbitron text-[8px] text-yellow-500/70 uppercase tracking-widest animate-pulse">Loading prices…</span>
+                </div>
+              )}
+            </div>
+
+            {/* Error — shown below plans, not instead of them */}
+            {showError && (
+              <div className="mb-3 px-3 py-2 rounded-lg border border-red-800/40 bg-red-950/30 text-center">
+                <p className="font-orbitron text-[8px] text-red-400 uppercase tracking-widest mb-1">Could not load prices from Google Play</p>
+                {offeringsErrorMsg && (
+                  <p className="font-mono text-[7px] text-red-400/70 break-all leading-relaxed mb-2">{offeringsErrorMsg}</p>
+                )}
                 <button
                   onClick={() => { setNotice(null); onRetry(); }}
                   className="font-orbitron text-[9px] font-black uppercase tracking-widest text-yellow-400 border border-yellow-600/40 px-4 py-1.5 rounded hover:bg-yellow-900/30 transition-colors"
                 >
                   ↻ Retry
                 </button>
-              </div>
-            ) : (
-              <div className="flex gap-2 mb-4">
-                {plans.map(({ key, plan, badge }) => {
-                  const isSelected = selected === key;
-                  const isAvailable = plan.pkg !== null;
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => isAvailable && setSelected(key)}
-                      disabled={!isAvailable}
-                      className={`flex-1 relative rounded-lg border-2 py-3 px-3 text-left transition-all ${
-                        !isAvailable
-                          ? 'border-slate-700 bg-slate-900/40 opacity-40 cursor-not-allowed'
-                          : isSelected
-                          ? 'border-yellow-400 bg-yellow-950/40 shadow-[0_0_16px_rgba(234,179,8,0.3)]'
-                          : 'border-slate-600 bg-slate-800/40 hover:border-slate-500'
-                      }`}
-                    >
-                      {badge && isAvailable && (
-                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-yellow-400 text-black font-orbitron text-[7px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full whitespace-nowrap">
-                          {badge}
-                        </span>
-                      )}
-                      <div className={`font-orbitron text-[9px] font-black uppercase tracking-widest mb-1 ${isSelected && isAvailable ? 'text-yellow-300' : 'text-gray-400'}`}>
-                        {plan.label}
-                      </div>
-                      <div className={`font-orbitron text-xl font-black leading-none ${isSelected && isAvailable ? 'text-white' : 'text-gray-300'}`}>
-                        {isAvailable ? plan.price : '—'}
-                      </div>
-                      <div className="font-orbitron text-[8px] text-gray-500 uppercase tracking-wide mt-0.5">
-                        {isAvailable ? plan.period : 'unavailable'}
-                      </div>
-                      {isSelected && isAvailable && (
-                        <div className="absolute top-2 right-2 w-3.5 h-3.5 rounded-full bg-yellow-400 flex items-center justify-center">
-                          <span className="text-black text-[8px] font-black">✓</span>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
               </div>
             )}
 
@@ -190,12 +198,13 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
             >
               {purchasing
                 ? '⟳ Processing...'
-                : canPurchase
-                  ? `⚡ Get ${selected === 'monthly' ? monthlyPlan.price + '/mo' : lifetimePlan.price + ' Lifetime'}`
-                  : '⚠ Plan Unavailable'}
+                : offeringsLoading
+                  ? '⟳ Loading plans...'
+                  : canPurchase
+                    ? `⚡ Get ${selected === 'monthly' ? monthlyPlan.price + '/mo' : lifetimePlan.price + ' Lifetime'}`
+                    : '↻ Tap Retry above'}
             </button>
 
-            {/* Restore Purchases */}
             <button
               onClick={handleRestore}
               disabled={restoring || purchasing}

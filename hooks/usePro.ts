@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { getOfferings, purchasePackage, checkIsPro, restorePurchases } from '../lib/revenuecat';
+import { getOfferings, purchasePackage, checkIsPro, restorePurchases, waitForRC } from '../lib/revenuecat';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 const PRO_STORAGE_KEY = 'rll_is_pro';
@@ -19,7 +19,6 @@ export type ProPlan = {
   pkg: PurchasesPackage | null;
 };
 
-/** Match a package as the monthly plan — no dangerous fallbacks. */
 function findMonthly(pkgs: PurchasesPackage[]): PurchasesPackage | null {
   return (
     pkgs.find(p => p.packageType === 'MONTHLY') ??
@@ -28,20 +27,27 @@ function findMonthly(pkgs: PurchasesPackage[]): PurchasesPackage | null {
   );
 }
 
-/** Match a package as the lifetime plan — no dangerous fallbacks. */
 function findLifetime(pkgs: PurchasesPackage[]): PurchasesPackage | null {
   return (
     pkgs.find(p => p.packageType === 'LIFETIME') ??
-    pkgs.find(p => p.identifier.toLowerCase().includes('lifetime')) ??
+    pkgs.find(p =>
+      p.identifier.toLowerCase().includes('lifetime') ||
+      p.identifier.toLowerCase().includes('life') ||
+      p.packageType === 'UNKNOWN'
+    ) ??
     null
   );
 }
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 export const usePro = () => {
   const [isPro, setIsPro] = useState<boolean>(loadLocalPro);
   const [purchasing, setPurchasing] = useState(false);
   const [offeringsLoading, setOfferingsLoading] = useState(Capacitor.isNativePlatform());
   const [offeringsError, setOfferingsError] = useState(false);
+  const [offeringsErrorMsg, setOfferingsErrorMsg] = useState<string>('');
+  const loadingRef = useRef(false);
 
   const [monthlyPlan, setMonthlyPlan] = useState<ProPlan>({
     label: 'Monthly', price: '$0.99', period: '/month', pkg: null,
@@ -52,77 +58,103 @@ export const usePro = () => {
 
   const loadOfferings = useCallback(async () => {
     if (!Capacitor.isNativePlatform()) return;
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setOfferingsLoading(true);
     setOfferingsError(false);
+    setOfferingsErrorMsg('');
+
     try {
-      const entitledOnServer = await checkIsPro();
+      await waitForRC();
+
+      // Check entitlement first — avoids unnecessary offerings load if already pro
+      const entitledOnServer = await checkIsPro().catch(() => false);
       if (entitledOnServer) {
         setIsPro(true);
         saveLocalPro(true);
+        setOfferingsLoading(false);
+        loadingRef.current = false;
+        return;
       } else {
         setIsPro(false);
         saveLocalPro(false);
       }
 
-      const offerings = await getOfferings();
+      // Retry getOfferings up to 3 times with 1 s between attempts
+      let lastError = '';
+      let packages: PurchasesPackage[] = [];
 
-      if (offerings?.current) {
-        const pkgs = offerings.current.availablePackages;
-
-        console.log('[usePro] packages from RC:', pkgs.map(p => ({
-          id: p.identifier,
-          type: p.packageType,
-          price: p.product.priceString,
-        })));
-
-        const monthly = findMonthly(pkgs);
-        const lifetime = findLifetime(pkgs);
-
-        console.log('[usePro] matched monthly:', monthly?.identifier ?? 'none');
-        console.log('[usePro] matched lifetime:', lifetime?.identifier ?? 'none');
-
-        if (monthly) {
-          setMonthlyPlan({
-            label: 'Monthly',
-            price: monthly.product.priceString,
-            period: '/month',
-            pkg: monthly,
-          });
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const { offerings, error } = await getOfferings();
+        if (error) {
+          lastError = error;
+          console.warn(`[usePro] getOfferings attempt ${attempt} failed:`, error);
+          if (attempt < 3) await sleep(1000 * attempt);
+          continue;
         }
-
-        if (lifetime) {
-          setLifetimePlan({
-            label: 'Lifetime',
-            price: lifetime.product.priceString,
-            period: 'one-time',
-            pkg: lifetime,
-          });
+        if (offerings?.current) {
+          packages = offerings.current.availablePackages;
+          console.log(`[usePro] attempt ${attempt} — packages:`, packages.map(p => ({
+            id: p.identifier, type: p.packageType, price: p.product.priceString,
+          })));
+          lastError = '';
+          break;
         }
-
-        if (!monthly && !lifetime) {
-          console.warn('[usePro] No monthly or lifetime package found in current offering.');
-          setOfferingsError(true);
-        }
-      } else {
-        console.warn('[usePro] No current offering configured in RevenueCat dashboard.');
-        setOfferingsError(true);
+        lastError = `offerings.current is null (attempt ${attempt})`;
+        console.warn('[usePro]', lastError);
+        if (attempt < 3) await sleep(1000 * attempt);
       }
-    } catch (e) {
-      console.error('[usePro] loadOfferings error:', e);
+
+      if (packages.length === 0) {
+        console.error('[usePro] No packages after 3 attempts. Last error:', lastError);
+        setOfferingsErrorMsg(lastError || 'No packages found in RC offering after 3 attempts.');
+        setOfferingsError(true);
+        setOfferingsLoading(false);
+        loadingRef.current = false;
+        return;
+      }
+
+      // Match monthly and lifetime; fall back to first/last package if needed
+      const monthly = findMonthly(packages);
+      const lifetime = findLifetime(packages);
+
+      // If nothing matched cleanly, use whatever we have
+      const effectiveMonthly = monthly ?? (packages.length >= 2 ? packages[0] : null);
+      const effectiveLifetime = lifetime ?? packages[packages.length - 1];
+
+      if (effectiveMonthly) {
+        setMonthlyPlan({
+          label: 'Monthly',
+          price: effectiveMonthly.product.priceString,
+          period: '/month',
+          pkg: effectiveMonthly,
+        });
+      }
+      if (effectiveLifetime) {
+        setLifetimePlan({
+          label: 'Lifetime',
+          price: effectiveLifetime.product.priceString,
+          period: 'one-time',
+          pkg: effectiveLifetime,
+        });
+      }
+
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      console.error('[usePro] unexpected error:', msg);
+      setOfferingsErrorMsg(msg);
       setOfferingsError(true);
     }
+
     setOfferingsLoading(false);
+    loadingRef.current = false;
   }, []);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    // Wait 1.5s for RC to finish configure() before the first offerings call.
-    // If that still fails, the Retry button in the modal calls loadOfferings again.
-    const t = setTimeout(loadOfferings, 1500);
-    return () => clearTimeout(t);
+    loadOfferings();
   }, [loadOfferings]);
 
-  /** Call after a successful RC paywall purchase to re-sync pro status. */
   const refreshProStatus = useCallback(async () => {
     try {
       const isNowPro = await checkIsPro();
@@ -139,14 +171,13 @@ export const usePro = () => {
       const planData = plan === 'monthly' ? monthlyPlan : lifetimePlan;
 
       if (!Capacitor.isNativePlatform()) {
-        return { success: false, error: 'Purchases are only available in the Android app.' };
+        return { success: false, error: 'Purchases only available in the Android app.' };
       }
-
       if (!planData.pkg) {
-        return { success: false, error: `The ${plan} plan is not available. Check your RevenueCat offering setup.` };
+        return { success: false, error: `${plan} plan not loaded yet — tap Retry then try again.` };
       }
 
-      console.log(`[usePro] purchasing ${plan} plan:`, planData.pkg.identifier);
+      console.log(`[usePro] purchasing ${plan}:`, planData.pkg.identifier);
       const result = await purchasePackage(planData.pkg);
       if (result.success) {
         setIsPro(true);
@@ -166,10 +197,7 @@ export const usePro = () => {
     }
     try {
       const result = await restorePurchases();
-      if (result.wasPro) {
-        setIsPro(true);
-        saveLocalPro(true);
-      }
+      if (result.wasPro) { setIsPro(true); saveLocalPro(true); }
       return result;
     } catch (e: any) {
       return { success: false, wasPro: false, error: e?.message ?? 'Restore failed.' };
@@ -177,7 +205,7 @@ export const usePro = () => {
   }, []);
 
   return {
-    isPro, purchasing, offeringsLoading, offeringsError,
+    isPro, purchasing, offeringsLoading, offeringsError, offeringsErrorMsg,
     monthlyPlan, lifetimePlan,
     purchasePlan,
     restoreProPurchases,

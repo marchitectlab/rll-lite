@@ -19,7 +19,6 @@ import { ReportExport } from './components/ReportExport';
 import { TaskList } from './components/TaskList';
 import { WorkshopPage } from './components/WorkshopPage';
 import { supabase } from './lib/supabase';
-import { presentRCPaywall } from './lib/revenuecat';
 import { schedulePlannerReminder, scheduleQuestReminder } from './lib/notifications';
 
 // ---- AdMob IDs ----
@@ -834,19 +833,10 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
     // Keep a ref in sync so the back-button handler always reads current page
     useEffect(() => { pageRef.current = page; }, [page]);
 
-    // Try RC dashboard paywall first; fall back to custom modal if not configured
+    // Open the purchase modal directly — RC Capacitor SDK has no native paywall UI
     const openPurchaseModal = useCallback(async () => {
-        if (Capacitor.isNativePlatform()) {
-            const result = await presentRCPaywall();
-            if (result === 'PURCHASED' || result === 'RESTORED') {
-                refreshProStatus();
-                return;
-            }
-            if (result === 'CANCELLED') return;
-            // 'NOT_PRESENTED' or 'ERROR' → show custom modal
-        }
         setShowPurchaseModal(true);
-    }, [refreshProStatus]);
+    }, []);
 
     // Sync pro dungeon key allowance whenever isPro changes
     useEffect(() => {
