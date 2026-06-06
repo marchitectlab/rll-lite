@@ -115,7 +115,10 @@ export const usePro = () => {
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(loadOfferings, 300);
+    if (!Capacitor.isNativePlatform()) return;
+    // Wait 1.5s for RC to finish configure() before the first offerings call.
+    // If that still fails, the Retry button in the modal calls loadOfferings again.
+    const t = setTimeout(loadOfferings, 1500);
     return () => clearTimeout(t);
   }, [loadOfferings]);
 
