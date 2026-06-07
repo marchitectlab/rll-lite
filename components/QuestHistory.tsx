@@ -9,6 +9,7 @@ interface QuestHistoryProps {
   completedQuests: CompletedQuest[];
   dungeonHistory: DungeonHistoryEntry[];
   onUpgradePro: () => void;
+  isPro: boolean;
 }
 
 interface DailyActivity {
@@ -61,8 +62,10 @@ const HistoryDetailModal: React.FC<{ date: Date; activities: DailyActivity; onCl
 };
 
 // --- MAIN COMPONENT ---
-export const QuestHistory: React.FC<QuestHistoryProps> = ({ completedQuests, dungeonHistory, onUpgradePro }) => {
+export const QuestHistory: React.FC<QuestHistoryProps> = ({ completedQuests, dungeonHistory, onUpgradePro, isPro }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [selectedActivity, setSelectedActivity] = useState<DailyActivity | null>(null);
 
     const activitiesByDate = useMemo(() => {
         const data = new Map<string, DailyActivity>();
@@ -74,7 +77,6 @@ export const QuestHistory: React.FC<QuestHistoryProps> = ({ completedQuests, dun
             return `${year}-${month}-${day}`;
         };
 
-        // Showing all quests including system quests in history
         completedQuests.forEach(quest => {
             const dateStr = toLocalDateKey(quest.completedAt);
             const entry = data.get(dateStr) || { quests: [], dungeons: [], totalXp: 0 };
@@ -96,6 +98,15 @@ export const QuestHistory: React.FC<QuestHistoryProps> = ({ completedQuests, dun
 
         return data;
     }, [completedQuests, dungeonHistory]);
+
+    const handleDayClick = (date: Date, activity: DailyActivity) => {
+        if (isPro) {
+            setSelectedDate(date);
+            setSelectedActivity(activity);
+        } else {
+            onUpgradePro();
+        }
+    };
 
     const renderCalendar = () => {
         const year = currentDate.getFullYear();
@@ -123,7 +134,7 @@ export const QuestHistory: React.FC<QuestHistoryProps> = ({ completedQuests, dun
             cells.push(
                 <div key={day} className="flex items-center justify-center h-14">
                     <button 
-                        onClick={() => { if(hasActivity) onUpgradePro(); }}
+                        onClick={() => { if (hasActivity) handleDayClick(date, dayActivity!); }}
                         className={`w-12 h-12 flex items-center justify-center text-base font-bold rounded-full transition-all duration-200 border-2 ${gradeStyles.border} ${hasActivity ? 'bg-gray-800/60 hover:bg-gray-700/80 cursor-pointer' : 'bg-transparent text-gray-600 cursor-default'}`}
                         disabled={!hasActivity}
                     >
@@ -141,10 +152,12 @@ export const QuestHistory: React.FC<QuestHistoryProps> = ({ completedQuests, dun
 
     return (
         <div>
-            <div className="flex items-center gap-2 mb-4 text-[10px] font-orbitron font-black text-yellow-500/70 uppercase tracking-widest bg-yellow-900/20 border border-yellow-500/20 rounded px-3 py-2">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                <span>Tap a date to view details — <span className="text-yellow-300">Pro feature</span></span>
-            </div>
+            {!isPro && (
+                <div className="flex items-center gap-2 mb-4 text-[10px] font-orbitron font-black text-yellow-500/70 uppercase tracking-widest bg-yellow-900/20 border border-yellow-500/20 rounded px-3 py-2">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    <span>Tap a date to view details — <span className="text-yellow-300">Pro feature</span></span>
+                </div>
+            )}
             <div className="flex justify-between items-center mb-4">
                 <button onClick={() => changeMonth(-1)} className="font-orbitron p-2 rounded-md hover:bg-gray-700">&lt;</button>
                 <h2 className="font-orbitron text-2xl text-blue-300">{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
@@ -154,6 +167,14 @@ export const QuestHistory: React.FC<QuestHistoryProps> = ({ completedQuests, dun
                 {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => <div key={day}>{day}</div>)}
             </div>
             <div className="grid grid-cols-7 gap-1">{renderCalendar()}</div>
+
+            {selectedDate && selectedActivity && (
+                <HistoryDetailModal
+                    date={selectedDate}
+                    activities={selectedActivity}
+                    onClose={() => { setSelectedDate(null); setSelectedActivity(null); }}
+                />
+            )}
         </div>
     );
 };

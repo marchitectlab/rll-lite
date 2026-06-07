@@ -802,6 +802,7 @@ const RATE_STORAGE_KEY = 'rll_levelups_since_rate';
 
 interface AppProps {
   userEmail?: string;
+  userId?: string;
   onSignIn: (email: string, password: string) => Promise<boolean>;
   onSignUp: (email: string, password: string) => Promise<{ success: boolean; needsConfirmation: boolean }>;
   onSignOut: () => Promise<void>;
@@ -811,9 +812,9 @@ interface AppProps {
   authLoading: boolean;
 }
 
-const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onResetPassword, authError, onClearAuthError, authLoading }) => {
+const App: React.FC<AppProps> = ({ userEmail, userId, onSignIn, onSignUp, onSignOut, onResetPassword, authError, onClearAuthError, authLoading }) => {
     const data = usePlayerData();
-    const { isPro, purchasing, offeringsLoading, offeringsError, monthlyPlan, lifetimePlan, purchasePlan, restoreProPurchases, retryOfferings, refreshProStatus } = usePro();
+    const { isPro, purchasing, offeringsLoading, offeringsError, offeringsErrorMsg, monthlyPlan, lifetimePlan, purchasePlan, restoreProPurchases, retryOfferings, refreshProStatus } = usePro();
     const [page, setPage] = useState<Page | 'startup'>('startup');
     const handleSignOut = useCallback(async () => {
         await onSignOut();
@@ -829,14 +830,40 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
     const promoCountRef = React.useRef(0);
     const prevLevelRef = React.useRef<number | null>(null);
     const pageRef = React.useRef<Page | 'startup'>('startup');
+    // Track whether we should reopen the paywall after login completes
+    const reopenPaywallAfterLoginRef = React.useRef(false);
 
     // Keep a ref in sync so the back-button handler always reads current page
     useEffect(() => { pageRef.current = page; }, [page]);
 
-    // Open the purchase modal directly — RC Capacitor SDK has no native paywall UI
+    // Open the purchase modal directly — prices visible immediately (RC is anonymous)
     const openPurchaseModal = useCallback(async () => {
         setShowPurchaseModal(true);
     }, []);
+
+    // Login-gated purchase: show paywall immediately (anonymous pricing),
+    // but require login before completing the actual transaction.
+    const handlePurchaseWithLoginGate = useCallback(async (plan: 'monthly' | 'lifetime'): Promise<{ success: boolean; error?: string }> => {
+        if (!userId) {
+            // Not logged in — close paywall, show auth modal, reopen after login
+            setShowPurchaseModal(false);
+            reopenPaywallAfterLoginRef.current = true;
+            setShowAuthModal(true);
+            return { success: false, error: 'Please log in or create an account to complete your purchase.' };
+        }
+        return purchasePlan(plan);
+    }, [userId, purchasePlan]);
+
+    // Login-gated restore: same pattern as purchase
+    const handleRestoreWithLoginGate = useCallback(async (): Promise<{ success: boolean; wasPro: boolean; error?: string }> => {
+        if (!userId) {
+            setShowPurchaseModal(false);
+            reopenPaywallAfterLoginRef.current = true;
+            setShowAuthModal(true);
+            return { success: false, wasPro: false, error: 'Please log in to restore your previous purchase.' };
+        }
+        return restoreProPurchases();
+    }, [userId, restoreProPurchases]);
 
     // Sync pro dungeon key allowance whenever isPro changes
     useEffect(() => {
@@ -1004,13 +1031,13 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
             case 'quests': return <QuestLogPage quests={data.quests} onComplete={handleCompleteQuest} onDelete={id => setConfirm({ title: 'Erase Entry', message: 'Permanently purge this quest record?', isDangerous: true, onConfirm: () => data.deleteQuest(id) })} onFail={id => data.failQuest(id)} onAddQuest={data.addQuest} onWatchAdForQuest={handleWatchAdForQuest} />;
             case 'skills': return <SkillsPage skills={data.skills} skillFolders={data.skillFolders} categories={data.categories} improveSkill={data.improveSkill} addSkill={data.addSkill} addSkillFolder={data.addSkillFolder} addCategory={data.addCategory} onDeleteSkill={data.deleteSkill} onDeleteSkillFolder={data.deleteSkillFolder} onDeleteCategory={data.deleteCategory} />;
             case 'dungeons': return <DungeonsPage onStartDungeon={d => setConfirm({ title: 'Enter Gate', message: `Proceed into [${d.grade}] Gate: ${d.name}? Danger level is high.`, onConfirm: () => data.startDungeon(d.id) })} activeDungeon={data.activeDungeon} dungeonCooldowns={data.dungeonCooldowns} onClearDungeon={handleClearDungeon} onFailDungeon={data.failActiveDungeon} onProgressDungeon={data.progressDungeon} dungeonHistory={data.dungeonHistory} playerLevel={data.player.level} dungeonKeys={data.dungeonKeys} isPro={isPro} onEarnKey={() => showRewardedAd(data.earnDungeonKey)} />;
-            case 'history': return <QuestHistory completedQuests={data.completedQuests} dungeonHistory={data.dungeonHistory} onUpgradePro={() => handleShowUpgrade('Detailed History Log')} />;
+            case 'history': return <QuestHistory completedQuests={data.completedQuests} dungeonHistory={data.dungeonHistory} onUpgradePro={() => handleShowUpgrade('Detailed History Log')} isPro={isPro} />;
             case 'task-list': return <TaskList weeklyPlan={data.weeklyPlan} onAddTask={data.addTaskListTask} onToggleTask={data.toggleTaskListTask} onDeleteTask={data.deleteTaskListTask} />;
             case 'workshop': return <WorkshopPage inventory={data.inventory} onEnhance={data.enhanceGear} onAdvance={data.advanceGear} player={data.player} />;
             case 'shop': return <ShopPage player={data.player} inventory={data.inventory} onBuyItem={i => setConfirm({ title: 'System Exchange', message: `Authorize coin transfer for ${i.name}?`, onConfirm: () => data.buyItem(i) })} />;
             case 'inventory': return <InventoryPageWrapper inventory={data.inventory} player={data.player} onEquip={data.equipItem} onUnequip={data.unequipItem} onBreak={slot => setConfirm({ title: 'Break Curse', message: 'Permanently destroy cursed equipment using Light Orb?', isDangerous: true, onConfirm: () => data.breakGear(slot) })} />;
             case 'codex': return <Codex onOpenExport={data.exportState} onOpenImport={data.importState} onSetBackground={() => {}} background={null} onNavigateToReport={() => navigateTo('report')} onLoginPress={!userEmail ? () => setShowAuthModal(true) : undefined} userEmail={userEmail} onSignOut={userEmail ? handleSignOut : undefined} />;
-            case 'report': return <ReportExport player={data.player} completedQuests={data.completedQuests} dungeonHistory={data.dungeonHistory} achievements={data.achievements} inventory={data.inventory} onUpgradePro={() => handleShowUpgrade('System Reports')} />;
+            case 'report': return <ReportExport player={data.player} completedQuests={data.completedQuests} dungeonHistory={data.dungeonHistory} achievements={data.achievements} inventory={data.inventory} onUpgradePro={() => handleShowUpgrade('System Reports')} isPro={isPro} />;
             default: return null;
         }
     };
@@ -1044,7 +1071,7 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
                     <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[500] flex items-end justify-center" onClick={() => setShowAuthModal(false)}>
                         <div className="w-full max-w-lg" onClick={e => e.stopPropagation()}>
                             <AuthPage
-                                onSignIn={async (email, password) => { const ok = await onSignIn(email, password); if (ok) setShowAuthModal(false); return ok; }}
+                                onSignIn={async (email, password) => { const ok = await onSignIn(email, password); if (ok) { setShowAuthModal(false); if (reopenPaywallAfterLoginRef.current) { reopenPaywallAfterLoginRef.current = false; setShowPurchaseModal(true); } } return ok; }}
                                 onSignUp={onSignUp}
                                 onForgotPassword={onResetPassword}
                                 loading={authLoading}
@@ -1177,12 +1204,13 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
             {showPurchaseModal && (
                 <ProPurchaseModal
                     onClose={() => setShowPurchaseModal(false)}
-                    onPurchase={purchasePlan}
-                    onRestore={restoreProPurchases}
+                    onPurchase={handlePurchaseWithLoginGate}
+                    onRestore={handleRestoreWithLoginGate}
                     onRetry={retryOfferings}
                     purchasing={purchasing}
                     offeringsLoading={offeringsLoading}
                     offeringsError={offeringsError}
+                    offeringsErrorMsg={offeringsErrorMsg}
                     monthlyPlan={monthlyPlan}
                     lifetimePlan={lifetimePlan}
                 />
@@ -1191,7 +1219,7 @@ const App: React.FC<AppProps> = ({ userEmail, onSignIn, onSignUp, onSignOut, onR
                 <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[500] flex items-end justify-center" onClick={() => setShowAuthModal(false)}>
                     <div className="w-full max-w-lg" onClick={e => e.stopPropagation()}>
                         <AuthPage
-                            onSignIn={async (email, password) => { const ok = await onSignIn(email, password); if (ok) setShowAuthModal(false); return ok; }}
+                            onSignIn={async (email, password) => { const ok = await onSignIn(email, password); if (ok) { setShowAuthModal(false); if (reopenPaywallAfterLoginRef.current) { reopenPaywallAfterLoginRef.current = false; setShowPurchaseModal(true); } } return ok; }}
                             onSignUp={onSignUp}
                             onForgotPassword={onResetPassword}
                             loading={authLoading}

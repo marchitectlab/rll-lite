@@ -10,6 +10,7 @@ interface ReportExportProps {
     achievements: Record<string, Achievement>;
     inventory: Inventory;
     onUpgradePro: () => void;
+    isPro: boolean;
 }
 
 type ReportType = 'daily' | 'monthly' | 'stats';
@@ -28,7 +29,7 @@ const RANK_COLORS: Record<string, string> = {
     X: '#ff0000'
 };
 
-export const ReportExport: React.FC<ReportExportProps> = ({ player, completedQuests, dungeonHistory, inventory, onUpgradePro }) => {
+export const ReportExport: React.FC<ReportExportProps> = ({ player, completedQuests, dungeonHistory, inventory, onUpgradePro, isPro }) => {
     const [reportType, setReportType] = useState<ReportType>('daily');
     const [aspectRatio, setAspectRatio] = useState<AspectRatio>('landscape');
     const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -280,7 +281,6 @@ export const ReportExport: React.FC<ReportExportProps> = ({ player, completedQue
             try {
                 const { Filesystem, Directory } = await import('@capacitor/filesystem');
                 const { Share } = await import('@capacitor/share');
-                // Strip data URL prefix — write raw base64 WITHOUT encoding param (binary file)
                 const base64Data = dataURL.split(',')[1];
                 await Filesystem.writeFile({
                     path: fileName,
@@ -307,6 +307,14 @@ export const ReportExport: React.FC<ReportExportProps> = ({ player, completedQue
             link.click();
         }
         setIsGenerating(false);
+    };
+
+    const handleRenderClick = () => {
+        if (isPro) {
+            drawReport();
+        } else {
+            onUpgradePro();
+        }
     };
 
     return (
@@ -340,13 +348,19 @@ export const ReportExport: React.FC<ReportExportProps> = ({ player, completedQue
                 </div>
                 <div className="flex flex-col justify-center items-center p-8 bg-slate-950/40 rounded-sm border border-slate-800 text-center">
                     <div className="space-y-3 w-full">
-                        <button onClick={onUpgradePro} className="w-full font-orbitron bg-blue-700/80 text-white py-5 rounded-sm uppercase font-black text-xs tracking-[0.4em] hover:bg-blue-600 hover:shadow-[0_0_20px_rgba(56,189,248,0.5)] transition-all border border-blue-400/30">
-                            INITIATE RENDER
+                        <button
+                            onClick={handleRenderClick}
+                            disabled={isGenerating}
+                            className="w-full font-orbitron bg-blue-700/80 text-white py-5 rounded-sm uppercase font-black text-xs tracking-[0.4em] hover:bg-blue-600 hover:shadow-[0_0_20px_rgba(56,189,248,0.5)] transition-all border border-blue-400/30 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            {isGenerating ? '⟳ RENDERING...' : 'INITIATE RENDER'}
                         </button>
-                        <div className="flex items-center justify-center gap-2 text-[9px] font-orbitron font-black text-yellow-500/60 uppercase tracking-widest">
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                            <span>Pro feature</span>
-                        </div>
+                        {!isPro && (
+                            <div className="flex items-center justify-center gap-2 text-[9px] font-orbitron font-black text-yellow-500/60 uppercase tracking-widest">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                                <span>Pro feature</span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

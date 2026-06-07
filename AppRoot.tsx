@@ -30,13 +30,21 @@ const LoadingScreen: React.FC = () => (
 const AppRoot: React.FC = () => {
   const { user, loading, signIn, signUp, signOut, resetPassword, error, clearError } = useAuth();
 
-  // Initialize RevenueCat on app launch (native only).
-  // Re-runs when auth resolves so purchases are attributed to the
-  // correct user ID — RC handles de-duplication of configure calls.
+  // Initialize RevenueCat ANONYMOUSLY on app start so prices are visible before login.
+  // This runs immediately — no waiting for auth.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    initializeRevenueCat(); // anonymous — no userId
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Once auth resolves and a user is known, re-initialize RC to link their identity.
+  // RC handles de-duplication of configure calls internally.
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     if (loading) return;
-    initializeRevenueCat(user?.id ?? undefined);
+    if (user?.id) {
+      initializeRevenueCat(user.id);
+    }
   }, [loading, user?.id]);
 
   // Request device notification permission once auth is settled.
@@ -51,6 +59,7 @@ const AppRoot: React.FC = () => {
   return (
     <App
       userEmail={user?.email}
+      userId={user?.id}
       onSignIn={signIn}
       onSignUp={signUp}
       onSignOut={signOut}
