@@ -516,7 +516,7 @@ const DungeonsPage: React.FC<{
     }
 
     if (view === 'cooldowns') {
-        const dungeonsOnCooldown = Object.entries(dungeonCooldowns).filter(([_, data]) => data.readyAt > Date.now());
+        const dungeonsOnCooldown = (Object.entries(dungeonCooldowns) as [string, DungeonCooldown][]).filter(([_, data]) => data.readyAt > Date.now());
         return (
             <div className="space-y-4">
                 {renderSubNav()}
