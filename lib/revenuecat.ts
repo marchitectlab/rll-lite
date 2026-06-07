@@ -1,4 +1,4 @@
-import { Purchases, LOG_LEVEL, PurchasesPackage, CustomerInfo, Offerings } from '@revenuecat/purchases-capacitor';
+import { Purchases, LOG_LEVEL, PurchasesPackage, CustomerInfo, PurchasesOfferings } from '@revenuecat/purchases-capacitor';
 import { Capacitor } from '@capacitor/core';
 
 export const REVENUECAT_API_KEY = 'goog_KgAFOsBJYohudnACLWCIbgABOSu';
@@ -79,17 +79,16 @@ export async function checkIsPro(): Promise<boolean> {
 // ---------------------------------------------------------------------------
 // Offerings — always returns { offerings, error }, never null
 // ---------------------------------------------------------------------------
-export async function getOfferings(): Promise<{ offerings: Offerings | null; error: string | null }> {
+export async function getOfferings(): Promise<{ offerings: PurchasesOfferings | null; error: string | null }> {
   if (!Capacitor.isNativePlatform()) {
     return { offerings: null, error: 'Not a native platform.' };
   }
 
   try {
     console.log('[RC] Purchases.getOfferings() — calling…');
-    const result = await Purchases.getOfferings();
-    const offerings = result.offerings;
+    const offerings = await Purchases.getOfferings();
 
-    console.log('[RC] Purchases.getOfferings() — raw result keys:', Object.keys(result));
+    console.log('[RC] Purchases.getOfferings() — raw result keys:', Object.keys(offerings));
     console.log('[RC] offerings.current:', offerings?.current?.identifier ?? 'null');
 
     const pkgs = offerings?.current?.availablePackages ?? [];
