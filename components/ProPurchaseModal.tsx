@@ -23,6 +23,8 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
   const [selected, setSelected] = useState<'monthly' | 'lifetime'>(defaultPlan);
   const [notice, setNotice] = useState<{ type: 'success' | 'error' | 'info'; msg: string } | null>(null);
   const [restoring, setRestoring] = useState(false);
+  const [errorExpanded, setErrorExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handlePurchase = async () => {
     setNotice(null);
@@ -50,20 +52,35 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
     setRestoring(false);
   };
 
+  const handleCopyError = () => {
+    const text = offeringsErrorMsg ?? 'No error message available';
+    try {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    } catch {
+      // clipboard not available
+    }
+  };
+
   // Plans as currently known — show placeholder prices while loading
   const plans: { key: 'monthly' | 'lifetime'; plan: ProPlan; badge?: string }[] = [
     { key: 'monthly', plan: monthlyPlan },
     { key: 'lifetime', plan: lifetimePlan, badge: 'BEST VALUE' },
   ];
 
-  // A plan is purchasable only when its package has loaded from RC
   const selectedPlanLoaded = selected === 'monthly' ? monthlyPlan.pkg !== null : lifetimePlan.pkg !== null;
   const canPurchase = !offeringsLoading && !offeringsError && selectedPlanLoaded;
 
-  // Determine what to show in the plan-selector area
   const showError = !offeringsLoading && offeringsError;
   const showPlans = !offeringsLoading && !offeringsError;
-  const showLoadingPlans = offeringsLoading; // show placeholder plans while loading
+  const showLoadingPlans = offeringsLoading;
+
+  // Truncate error message for display — full message available via expand
+  const errorPreview = offeringsErrorMsg && offeringsErrorMsg.length > 120
+    ? offeringsErrorMsg.slice(0, 120) + '…'
+    : offeringsErrorMsg;
 
   return (
     <div
@@ -109,7 +126,6 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
             {/* Plan selector */}
             <p className="font-orbitron text-[9px] text-yellow-600 uppercase tracking-widest mb-2">Choose your plan:</p>
 
-            {/* Always show plan cards — loading state dims them and shows spinner */}
             <div className="flex gap-2 mb-3 relative">
               {plans.map(({ key, plan, badge }) => {
                 const isSelected = selected === key;
@@ -153,7 +169,6 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
                 );
               })}
 
-              {/* Loading overlay */}
               {showLoadingPlans && (
                 <div className="absolute inset-0 flex items-center justify-center">
                   <span className="font-orbitron text-[8px] text-yellow-500/70 uppercase tracking-widest animate-pulse">Loading prices…</span>
@@ -161,19 +176,50 @@ export const ProPurchaseModal: React.FC<ProPurchaseModalProps> = ({
               )}
             </div>
 
-            {/* Error — shown below plans, not instead of them */}
+            {/* Error panel — readable font size so the error is actually visible */}
             {showError && (
-              <div className="mb-3 px-3 py-2 rounded-lg border border-red-800/40 bg-red-950/30 text-center">
-                <p className="font-orbitron text-[8px] text-red-400 uppercase tracking-widest mb-1">Could not load prices from Google Play</p>
-                {offeringsErrorMsg && (
-                  <p className="font-mono text-[7px] text-red-400/70 break-all leading-relaxed mb-2">{offeringsErrorMsg}</p>
-                )}
-                <button
-                  onClick={() => { setNotice(null); onRetry(); }}
-                  className="font-orbitron text-[9px] font-black uppercase tracking-widest text-yellow-400 border border-yellow-600/40 px-4 py-1.5 rounded hover:bg-yellow-900/30 transition-colors"
-                >
-                  ↻ Retry
-                </button>
+              <div className="mb-3 rounded-lg border border-red-800/50 bg-red-950/40 overflow-hidden">
+                <div className="px-3 pt-3 pb-2">
+                  <p className="font-orbitron text-[10px] font-black text-red-400 uppercase tracking-widest mb-2">
+                    Could not load prices from Google Play
+                  </p>
+
+                  {offeringsErrorMsg && (
+                    <>
+                      {/* Always-visible preview — 11px so it's readable on a phone */}
+                      <p className="text-[11px] text-red-300 leading-snug break-all mb-1">
+                        {errorExpanded ? offeringsErrorMsg : errorPreview}
+                      </p>
+
+                      {/* Toggle full error if it was truncated */}
+                      {offeringsErrorMsg.length > 120 && (
+                        <button
+                          onClick={() => setErrorExpanded(v => !v)}
+                          className="font-orbitron text-[9px] text-red-500/70 underline mb-2"
+                        >
+                          {errorExpanded ? 'Show less' : 'Show full error'}
+                        </button>
+                      )}
+
+                      {/* Copy button so the user can paste the error into a bug report */}
+                      <button
+                        onClick={handleCopyError}
+                        className="font-orbitron text-[9px] font-black uppercase tracking-widest text-yellow-500/80 border border-yellow-700/40 px-2 py-1 rounded mb-2 block"
+                      >
+                        {copied ? '✓ Copied!' : '📋 Copy error'}
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                <div className="border-t border-red-800/30 px-3 py-2 text-center">
+                  <button
+                    onClick={() => { setNotice(null); onRetry(); }}
+                    className="font-orbitron text-[10px] font-black uppercase tracking-widest text-yellow-400 border border-yellow-600/40 px-4 py-1.5 rounded hover:bg-yellow-900/30 transition-colors"
+                  >
+                    ↻ Retry
+                  </button>
+                </div>
               </div>
             )}
 

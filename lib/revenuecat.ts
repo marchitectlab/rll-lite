@@ -5,23 +5,68 @@ export const REVENUECAT_API_KEY = 'goog_KgAFOsBJYohudnACLWCIbgABOSu';
 export const ENTITLEMENT_ID = 'pro';
 
 // ---------------------------------------------------------------------------
-// RC readiness gate — waitForRC() resolves once configure() finishes
+// Error serialization — RC errors are NOT standard JS Error objects.
+// They look like: { code, message, underlyingErrorMessage, userInfo }
+// ---------------------------------------------------------------------------
+export function serializeRCError(e: unknown): string {
+  if (e === null || e === undefined) return 'Unknown error (null/undefined)';
+  if (typeof e === 'string') return e;
+  if (typeof e === 'number') return `Error code: ${e}`;
+
+  try {
+    const obj = e as Record<string, unknown>;
+    const parts: string[] = [];
+
+    if (obj.message) parts.push(`message: ${obj.message}`);
+    if (obj.code !== undefined) parts.push(`code: ${obj.code}`);
+    if (obj.underlyingErrorMessage) parts.push(`underlying: ${obj.underlyingErrorMessage}`);
+    if (obj.userInfo) {
+      try { parts.push(`userInfo: ${JSON.stringify(obj.userInfo)}`); } catch {}
+    }
+
+    if (parts.length > 0) return parts.join(' | ');
+
+    // Fall through to full stringify
+    const serialized = JSON.stringify(e, null, 2);
+    return serialized.length > 0 ? serialized : String(e);
+  } catch {
+    return String(e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RC readiness gate — waitForRC() resolves once configure() finishes.
+// The gate is RESET each time initializeRevenueCat() is called so that
+// a second configure() (e.g. after auth resolves) creates a fresh promise.
 // ---------------------------------------------------------------------------
 let _rcResolve: (() => void) | null = null;
 let _rcReject: ((e: unknown) => void) | null = null;
 let _rcReady = false;
 let _rcError: unknown = null;
+let _rcPromise: Promise<void>;
 
-const _rcPromise: Promise<void> = new Promise((res, rej) => {
-  _rcResolve = res;
-  _rcReject = rej;
-});
+function _resetGate() {
+  _rcReady = false;
+  _rcError = null;
+  _rcPromise = new Promise<void>((res, rej) => {
+    _rcResolve = res;
+    _rcReject = rej;
+  });
+}
+
+// Initialize the gate on module load.
+_resetGate();
 
 /** Waits until initializeRevenueCat() has completed (or thrown). */
 export function waitForRC(): Promise<void> {
   if (_rcReady) return Promise.resolve();
   if (_rcError) return Promise.reject(_rcError);
   return _rcPromise;
+}
+
+/** Returns true if RC has been successfully configured. */
+export function isRCReady(): boolean {
+  return _rcReady;
 }
 
 // ---------------------------------------------------------------------------
@@ -31,26 +76,44 @@ export async function initializeRevenueCat(userId?: string): Promise<void> {
   if (!Capacitor.isNativePlatform()) {
     console.log('[RC] Not a native platform — skipping initialization.');
     _rcReady = true;
+    _rcError = null;
     _rcResolve?.();
     return;
   }
 
+  // Reset the gate so a fresh promise is returned to any new waitForRC() callers.
+  // Any previous callers holding an old rejected promise must retry (tap Retry).
+  _resetGate();
+  console.log('[RC] initializeRevenueCat — gate reset. userId:', userId ?? '(anonymous)');
+
   try {
-    console.log('[RC] initializeRevenueCat — start. userId:', userId ?? '(anonymous)');
+    console.log('[RC] Purchases.setLogLevel(DEBUG)…');
     await Purchases.setLogLevel({ level: LOG_LEVEL.DEBUG });
-    await Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+
+    console.log('[RC] Purchases.configure() — apiKey starts with:', REVENUECAT_API_KEY.slice(0, 8) + '…');
+    await Purchases.configure({
+      apiKey: REVENUECAT_API_KEY,
+      ...(userId ? { appUserID: userId } : {}),
+    });
     console.log('[RC] Purchases.configure() — SUCCESS');
 
     if (userId) {
-      await Purchases.logIn({ appUserID: userId });
-      console.log('[RC] Purchases.logIn() — SUCCESS, appUserID:', userId);
+      try {
+        const { customerInfo } = await Purchases.logIn({ appUserID: userId });
+        console.log('[RC] Purchases.logIn() — SUCCESS, originalAppUserId:', customerInfo?.originalAppUserId);
+      } catch (loginErr: unknown) {
+        // logIn failure is non-fatal — we're already configured
+        console.warn('[RC] Purchases.logIn() — WARNING (non-fatal):', serializeRCError(loginErr));
+      }
     }
 
     _rcReady = true;
     _rcResolve?.();
-    console.log('[RC] initializeRevenueCat — COMPLETE');
-  } catch (e: any) {
-    console.error('[RC] initializeRevenueCat — FAILED:', e?.message ?? e);
+    console.log('[RC] initializeRevenueCat — COMPLETE, _rcReady=true');
+  } catch (e: unknown) {
+    const msg = serializeRCError(e);
+    console.error('[RC] initializeRevenueCat — FAILED:', msg);
+    console.error('[RC] Full error object:', JSON.stringify(e, Object.getOwnPropertyNames(e as object)));
     _rcError = e;
     _rcReject?.(e);
   }
@@ -64,8 +127,8 @@ export async function getCustomerInfo(): Promise<CustomerInfo | null> {
   try {
     const { customerInfo } = await Purchases.getCustomerInfo();
     return customerInfo;
-  } catch (e: any) {
-    console.error('[RC] getCustomerInfo error:', e?.message ?? e);
+  } catch (e: unknown) {
+    console.error('[RC] getCustomerInfo error:', serializeRCError(e));
     return null;
   }
 }
@@ -84,14 +147,22 @@ export async function getOfferings(): Promise<{ offerings: PurchasesOfferings | 
     return { offerings: null, error: 'Not a native platform.' };
   }
 
+  if (!_rcReady) {
+    const msg = 'getOfferings() called before RC is ready. Call waitForRC() first.';
+    console.error('[RC]', msg);
+    return { offerings: null, error: msg };
+  }
+
   try {
     console.log('[RC] Purchases.getOfferings() — calling…');
     const offerings = await Purchases.getOfferings();
 
-    console.log('[RC] Purchases.getOfferings() — raw result keys:', Object.keys(offerings));
-    console.log('[RC] offerings.current:', offerings?.current?.identifier ?? 'null');
+    const topLevelKeys = Object.keys(offerings ?? {});
+    console.log('[RC] Purchases.getOfferings() — raw result keys:', topLevelKeys);
+    console.log('[RC] offerings.current identifier:', (offerings as any)?.current?.identifier ?? 'null');
+    console.log('[RC] offerings.all keys:', Object.keys((offerings as any)?.all ?? {}));
 
-    const pkgs = offerings?.current?.availablePackages ?? [];
+    const pkgs: PurchasesPackage[] = (offerings as any)?.current?.availablePackages ?? [];
     console.log(
       '[RC] availablePackages (' + pkgs.length + '):',
       pkgs.map(p => ({
@@ -102,16 +173,21 @@ export async function getOfferings(): Promise<{ offerings: PurchasesOfferings | 
       }))
     );
 
-    if (!offerings?.current) {
-      const msg = `Purchases.getOfferings() succeeded but offerings.current is null. All offerings keys: [${Object.keys(offerings ?? {}).join(', ')}]`;
+    if (!(offerings as any)?.current) {
+      const msg =
+        `getOfferings() succeeded but offerings.current is null. ` +
+        `Top-level keys: [${topLevelKeys.join(', ')}]. ` +
+        `All offering IDs: [${Object.keys((offerings as any)?.all ?? {}).join(', ')}]. ` +
+        `Make sure your RevenueCat "default" offering is set as the Current Offering in the RC dashboard.`;
       console.warn('[RC]', msg);
       return { offerings: null, error: msg };
     }
 
-    return { offerings, error: null };
-  } catch (e: any) {
-    const msg = e?.message ?? String(e);
-    console.error('[RC] Purchases.getOfferings() — THREW:', msg, e);
+    return { offerings: offerings as unknown as PurchasesOfferings, error: null };
+  } catch (e: unknown) {
+    const msg = serializeRCError(e);
+    console.error('[RC] Purchases.getOfferings() — THREW:', msg);
+    console.error('[RC] Full offerings error:', JSON.stringify(e, Object.getOwnPropertyNames(e as object)));
     return { offerings: null, error: msg };
   }
 }
@@ -147,11 +223,12 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<{ success:
     const { customerInfo } = await Purchases.purchasePackage({ aPackage: pkg });
     const isPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
     return { success: isPro };
-  } catch (e: any) {
-    if (e?.userCancelled) {
+  } catch (e: unknown) {
+    const obj = e as Record<string, unknown>;
+    if (obj?.userCancelled) {
       return { success: false, error: 'Purchase cancelled.' };
     }
-    return { success: false, error: e?.message ?? 'Purchase failed.' };
+    return { success: false, error: serializeRCError(e) };
   }
 }
 
@@ -163,8 +240,8 @@ export async function restorePurchases(): Promise<{ success: boolean; wasPro: bo
     const { customerInfo } = await Purchases.restorePurchases();
     const wasPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
     return { success: true, wasPro };
-  } catch (e: any) {
-    console.error('[RC] restorePurchases error:', e?.message ?? e);
+  } catch (e: unknown) {
+    console.error('[RC] restorePurchases error:', serializeRCError(e));
     return { success: false, wasPro: false };
   }
 }

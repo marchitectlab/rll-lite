@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { getOfferings, purchasePackage, checkIsPro, restorePurchases, waitForRC } from '../lib/revenuecat';
+import { getOfferings, purchasePackage, checkIsPro, restorePurchases, waitForRC, serializeRCError } from '../lib/revenuecat';
 import { PurchasesPackage } from '@revenuecat/purchases-capacitor';
 
 const PRO_STORAGE_KEY = 'rll_is_pro';
@@ -65,7 +65,22 @@ export const usePro = () => {
     setOfferingsErrorMsg('');
 
     try {
-      await waitForRC();
+      // Wait for RC to initialize. If this throws, it means RC configure() failed.
+      // We wait a brief moment and retry once — the most common case is that auth
+      // was still resolving when the first configure() ran, and a second configure()
+      // is already in flight with the user's ID.
+      console.log('[usePro] waiting for RC…');
+      try {
+        await waitForRC();
+        console.log('[usePro] RC is ready');
+      } catch (initErr: unknown) {
+        const initMsg = serializeRCError(initErr);
+        console.warn('[usePro] waitForRC() rejected:', initMsg, '— waiting 3 s for possible re-init…');
+        await sleep(3000);
+        // Try once more after waiting (re-init may have been triggered by auth resolving)
+        await waitForRC();
+        console.log('[usePro] RC is ready after retry wait');
+      }
 
       // Check entitlement first — avoids unnecessary offerings load if already pro
       const entitledOnServer = await checkIsPro().catch(() => false);
@@ -80,20 +95,21 @@ export const usePro = () => {
         saveLocalPro(false);
       }
 
-      // Retry getOfferings up to 3 times with 1 s between attempts
+      // Retry getOfferings up to 3 times with increasing delays
       let lastError = '';
       let packages: PurchasesPackage[] = [];
 
       for (let attempt = 1; attempt <= 3; attempt++) {
+        console.log(`[usePro] getOfferings attempt ${attempt}/3…`);
         const { offerings, error } = await getOfferings();
         if (error) {
           lastError = error;
-          console.warn(`[usePro] getOfferings attempt ${attempt} failed:`, error);
-          if (attempt < 3) await sleep(1000 * attempt);
+          console.warn(`[usePro] getOfferings attempt ${attempt} failed: ${error}`);
+          if (attempt < 3) await sleep(1500 * attempt);
           continue;
         }
-        if (offerings?.current) {
-          packages = offerings.current.availablePackages;
+        if ((offerings as any)?.current) {
+          packages = (offerings as any).current.availablePackages;
           console.log(`[usePro] attempt ${attempt} — packages:`, packages.map(p => ({
             id: p.identifier, type: p.packageType, price: p.product.priceString,
           })));
@@ -102,12 +118,13 @@ export const usePro = () => {
         }
         lastError = `offerings.current is null (attempt ${attempt})`;
         console.warn('[usePro]', lastError);
-        if (attempt < 3) await sleep(1000 * attempt);
+        if (attempt < 3) await sleep(1500 * attempt);
       }
 
       if (packages.length === 0) {
-        console.error('[usePro] No packages after 3 attempts. Last error:', lastError);
-        setOfferingsErrorMsg(lastError || 'No packages found in RC offering after 3 attempts.');
+        const finalMsg = lastError || 'No packages found in RC offering after 3 attempts.';
+        console.error('[usePro] No packages after 3 attempts. Last error:', finalMsg);
+        setOfferingsErrorMsg(finalMsg);
         setOfferingsError(true);
         setOfferingsLoading(false);
         loadingRef.current = false;
@@ -118,7 +135,6 @@ export const usePro = () => {
       const monthly = findMonthly(packages);
       const lifetime = findLifetime(packages);
 
-      // If nothing matched cleanly, use whatever we have
       const effectiveMonthly = monthly ?? (packages.length >= 2 ? packages[0] : null);
       const effectiveLifetime = lifetime ?? packages[packages.length - 1];
 
@@ -139,9 +155,9 @@ export const usePro = () => {
         });
       }
 
-    } catch (e: any) {
-      const msg = e?.message ?? String(e);
-      console.error('[usePro] unexpected error:', msg);
+    } catch (e: unknown) {
+      const msg = serializeRCError(e);
+      console.error('[usePro] unexpected error in loadOfferings:', msg);
       setOfferingsErrorMsg(msg);
       setOfferingsError(true);
     }
@@ -184,8 +200,8 @@ export const usePro = () => {
         saveLocalPro(true);
       }
       return result;
-    } catch (e: any) {
-      return { success: false, error: e?.message ?? 'Purchase failed.' };
+    } catch (e: unknown) {
+      return { success: false, error: serializeRCError(e) };
     } finally {
       setPurchasing(false);
     }
@@ -199,8 +215,8 @@ export const usePro = () => {
       const result = await restorePurchases();
       if (result.wasPro) { setIsPro(true); saveLocalPro(true); }
       return result;
-    } catch (e: any) {
-      return { success: false, wasPro: false, error: e?.message ?? 'Restore failed.' };
+    } catch (e: unknown) {
+      return { success: false, wasPro: false, error: serializeRCError(e) };
     }
   }, []);
 
